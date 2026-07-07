@@ -642,6 +642,14 @@ void FFrame::set_menubar()
     session_menu->AppendSeparator();
     append_mi(session_menu, ID_SESSION_RESET, GET_BMP(reload16), wxT("&Reset"),
                                       wxT("Reset current session"));
+#ifdef __WXMAC__
+    // Close/Minimize live in this (non-special) menu so their Cmd shortcuts
+    // are reliably delivered. A menu titled "Window" is special-cased by macOS
+    // and can swallow custom items' accelerators.
+    session_menu->AppendSeparator();
+    session_menu->Append(ID_WINDOW_MINIMIZE, wxT("&Minimize\tCtrl-M"));
+    session_menu->Append(ID_WINDOW_CLOSE, wxT("&Close Window\tCtrl-W"));
+#endif
     session_menu->Append(wxID_EXIT, wxT("&Quit"));
 
     wxMenu* data_menu = new wxMenu;
@@ -878,10 +886,8 @@ void FFrame::set_menubar()
     edit_menu->Append(wxID_COPY, wxT("&Copy\tCtrl-C"));
     edit_menu->Append(wxID_PASTE, wxT("&Paste\tCtrl-V"));
     edit_menu->Append(wxID_SELECTALL, wxT("Select &All\tCtrl-A"));
-    // Standard macOS Window menu: Minimize (Cmd-M) and Close (Cmd-W).
-    wxMenu* window_menu = new wxMenu;
-    window_menu->Append(ID_WINDOW_MINIMIZE, wxT("&Minimize\tCtrl-M"));
-    window_menu->Append(ID_WINDOW_CLOSE, wxT("&Close Window\tCtrl-W"));
+    // Minimize/Close are added to the Session menu (see above) instead of a
+    // dedicated "Window" menu, which macOS special-cases.
 #endif
 
     wxMenuBar *menu_bar = new wxMenuBar();
@@ -894,9 +900,6 @@ void FFrame::set_menubar()
     menu_bar->Append (fit_menu, wxT("F&it") );
     menu_bar->Append (tools_menu, wxT("&Tools") );
     menu_bar->Append (gui_menu, wxT("&GUI"));
-#ifdef __WXMAC__
-    menu_bar->Append (window_menu, wxT("&Window"));
-#endif
     menu_bar->Append (help_menu, wxT("&Help"));
 
     SetMenuBar(menu_bar);
@@ -2373,7 +2376,9 @@ void FFrame::activate_function(int n)
 
 void FFrame::update_app_title()
 {
-    string title = "Fityk " VERSION;
+    // "Fityk +" build marker (bump the r-tag each release) so one can tell at
+    // a glance that the customized build is running.
+    string title = "Fityk +  [r3]";
     int pos = get_focused_data_index();
     string const& filename = ftk->dk.data(pos)->get_filename();
     if (!filename.empty())

@@ -283,6 +283,13 @@ bool FApp::OnInit(void)
 
     frame->Show(true);
 
+#ifdef __WXMAC__
+    // Re-assert once the native window is fully realized: the green title-bar
+    // button then maximizes (keeping the menu bar visible) instead of entering
+    // native full screen (which auto-hides the menu bar).
+    frame->EnableFullScreenView(false);
+#endif
+
     // sash inside wxNoteBook can have wrong position (eg. wxGTK 2.7.1)
     frame->sidebar_->read_settings(cf);
     // sash on the status bar is also in the wrong place (wxGTK),
