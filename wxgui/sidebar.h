@@ -89,8 +89,12 @@ public:
     virtual void on_parameter_changing(const std::vector<realt>& values);
     virtual void on_parameter_changed(int n);
     virtual void on_parameter_lock_clicked(int n, int state);
+    virtual void on_parameter_context_menu(int n);
 
 private:
+    // true if parameter panel row n is a Gaussian-style width (hwhm) shown
+    // to the user as FWHM (= 2*hwhm)
+    bool pp_row_is_width(int n) const;
     wxNotebook *nb;
     wxPanel *data_page, *func_page, *var_page;
     fityk::Function const* pp_func_; ///parameter panel function

@@ -140,9 +140,14 @@ DataExportDlg::DataExportDlg(wxWindow* parent, wxWindowID id, int f_count)
     Connect(text->GetId(), wxEVT_COMMAND_TEXT_UPDATED,
             wxCommandEventHandler(DataExportDlg::OnTextChanged));
 
-    wxString t = wxConfig::Get()->Read(wxT("/exportPoints"),
-                                       wxT("all: x, y, F(x)"));
-    text->SetValue(t);
+    // Preselect the columns most useful for peak fitting: only the active
+    // points (the range selected by the user), the x and y data, every model
+    // component, the model (sum) and the residuals.
+    wxString default_cols = wxT("if a: x, y");
+    if (!all_func.empty())
+        default_cols += wxT(", ") + all_func;
+    default_cols += wxT(", F(x), y-F(x)");
+    text->SetValue(default_cols);
 }
 
 

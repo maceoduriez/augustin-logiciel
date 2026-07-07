@@ -43,6 +43,7 @@ using fityk::Tplate;
 using fityk::Variable;
 using fityk::Function;
 using fityk::Model;
+using fityk::RealRange;
 
 enum {
     ID_DP_LIST       = 27500   ,
@@ -231,7 +232,7 @@ SideBar::SideBar(wxWindow *parent, wxWindowID id)
     func_sizer->Add(f, 1, wxEXPAND|wxALL, 1);
     wxBoxSizer *func_buttons_sizer = new wxBoxSizer(wxHORIZONTAL);
     add_toggle_bitmap_button(func_page, ID_FP_HWHM, wxT("=W"), GET_BMP(eq_fwhm),
-                             wxT("same HWHM for all functions"),
+                             wxT("same width (FWHM) for all functions"),
                              func_buttons_sizer);
     add_toggle_bitmap_button(func_page, ID_FP_SHAPE, wxT("=S"),
                              GET_BMP(eq_shape),
@@ -1000,6 +1001,72 @@ void SideBar::on_parameter_lock_clicked(int n, int state)
     }
 }
 
+bool SideBar::pp_row_is_width(int n) const
+{
+    return pp_func_ != NULL && n >= 0 && n < pp_func_->nv()
+           && pp_func_->get_param(n) == "hwhm";
+}
+
+// Right-click on a parameter row: offer to lock the parameter within a
+// +/- range (a domain constraint honoured by mpfit), or to remove it.
+void SideBar::on_parameter_context_menu(int n)
+{
+    if (pp_func_ == NULL || n < 0 || n >= pp_func_->used_vars().get_count())
+        return;
+    const Variable* var =
+        ftk->mgr.get_variable(pp_func_->used_vars().get_idx(n));
+    if (!var->is_simple())
+        return; // only a plain fittable parameter can carry a range constraint
+
+    const RealRange& dom = var->domain;
+    bool has_dom = !dom.lo_inf() || !dom.hi_inf();
+    bool is_width = pp_row_is_width(n);
+    double scale = is_width ? 2. : 1.;
+    wxString pname = is_width ? wxT("fwhm") : s2wx(pp_func_->get_param(n));
+
+    enum { ID_RANGE = wxID_HIGHEST + 1, ID_CLEAR };
+    wxMenu menu;
+    menu.Append(ID_RANGE,
+                wxT("Lock ") + pname + wxT(" within \u00b1 range..."));
+    if (has_dom)
+        menu.Append(ID_CLEAR, wxT("Remove range constraint"));
+
+    int cmd = GetPopupMenuSelectionFromUser(menu);
+    if (cmd == wxID_NONE)
+        return;
+
+    string vname = wx2s(param_panel_->get_label2(n)); // "$name"
+    double value = var->value();
+
+    if (cmd == ID_CLEAR) {
+        exec(vname + " = ~" + eS(value) + " [:]");
+        return;
+    }
+
+    // ID_RANGE: ask for the +/- tolerance, expressed in the displayed units
+    double cur_tol = 0;
+    if (!dom.lo_inf() && !dom.hi_inf())
+        cur_tol = (dom.hi - dom.lo) / 2 * scale;
+    wxString def = cur_tol > 0 ? wxString::Format(wxT("%g"), cur_tol) : wxT("");
+    wxString msg = wxT("Keep ") + pname
+        + wxString::Format(wxT(" = %g free only within \u00b1 ... during fitting:"),
+                           value * scale);
+    wxString reply = wxGetTextFromUser(msg, wxT("Range constraint (lock \u00b1)"),
+                                       def, this);
+    if (reply.empty())
+        return;
+    double tol;
+    if (!reply.ToDouble(&tol) || tol < 0) {
+        wxMessageBox(wxT("Please enter a non-negative number."),
+                     wxT("Invalid value"), wxOK|wxICON_ERROR, this);
+        return;
+    }
+    double native_tol = tol / scale;
+    double lo = value - native_tol;
+    double hi = value + native_tol;
+    exec(vname + " = ~" + eS(value) + " [" + eS(lo) + ":" + eS(hi) + "]");
+}
+
 void SideBar::update_param_panel()
 {
     int old_count = param_panel_->get_count();
@@ -1028,14 +1095,33 @@ void SideBar::update_param_panel()
     for (int i = 0; i < new_count; ++i) {
         const Variable* var =
             ftk->mgr.get_variable(pp_func_->used_vars().get_idx(i));
-        wxString label = s2wx(pp_func_->get_param(i));
+        // Show Gaussian-style half-width (hwhm) as full width (FWHM = 2*hwhm).
+        bool is_width = (pp_func_->get_param(i) == "hwhm");
+        double scale = is_width ? 2. : 1.;
+        wxString label = is_width ? wxT("fwhm") : s2wx(pp_func_->get_param(i));
+        // Append a marker showing an active range constraint (domain).
+        const RealRange& dom = var->domain;
+        if (var->is_simple() && (!dom.lo_inf() || !dom.hi_inf())) {
+            if (!dom.lo_inf() && !dom.hi_inf()) {
+                double half = (dom.hi - dom.lo) / 2 * scale;
+                double mid = (dom.hi + dom.lo) / 2 * scale;
+                if (fabs(mid - var->value() * scale) < 1e-6 * (1 + fabs(mid)))
+                    label += wxString::Format(wxT("  \u00b1%g"), half);
+                else
+                    label += wxString::Format(wxT("  [%g:%g]"),
+                                              dom.lo * scale, dom.hi * scale);
+            } else if (!dom.lo_inf())
+                label += wxString::Format(wxT("  \u2265%g"), dom.lo * scale);
+            else
+                label += wxString::Format(wxT("  \u2264%g"), dom.hi * scale);
+        }
         if (var->is_simple() || var->is_constant()) {
             bool locked = var->is_constant();
             param_panel_->set_normal_parameter(i, label, var->value(),
-                                               locked, s2wx("$"+var->name));
+                                             locked, s2wx("$"+var->name), scale);
         } else
             param_panel_->set_disabled_parameter(i, label, var->value(),
-                                                 s2wx("$"+var->name));
+                                             s2wx("$"+var->name), scale);
     }
 
     // Layout() is needed only when the layout has changed (e.g. when label2

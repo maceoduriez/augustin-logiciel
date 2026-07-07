@@ -226,7 +226,7 @@ void ParameterPanel::change_value(ValueChangingWidget *w, double factor)
         old_value_ = values_[n];
     }
     values_[n] += term;
-    rows_[n].text->SetValue(double2wxstr(values_[n]));
+    rows_[n].text->SetValue(double2wxstr(values_[n] * scales_[n]));
     observer_->on_parameter_changing(values_);
 }
 
@@ -257,14 +257,15 @@ double ParameterPanel::get_value(int n) const
 void ParameterPanel::set_value(int n, double value)
 {
     values_[n] = value;
-    rows_[n].text->ChangeValue(double2wxstr(value));
+    rows_[n].text->ChangeValue(double2wxstr(value * scales_[n]));
 }
 
 void ParameterPanel::set_normal_parameter(int n, const wxString& label,
                                           double value, bool locked,
-                                          const wxString& label2)
+                                          const wxString& label2, double scale)
 {
     change_mode(n, true);
+    scales_[n] = scale;
     set_value(n, value);
     rows_[n].label->SetLabel(label);
     rows_[n].text->SetToolTip(label2);
@@ -275,9 +276,10 @@ void ParameterPanel::set_normal_parameter(int n, const wxString& label,
 
 void ParameterPanel::set_disabled_parameter(int n, const wxString& label,
                                             double value,
-                                            const wxString& label2)
+                                            const wxString& label2, double scale)
 {
     change_mode(n, false);
+    scales_[n] = scale;
     set_value(n, value);
     rows_[n].label->SetLabel(label);
     rows_[n].text->SetToolTip(label2);
@@ -310,6 +312,7 @@ void ParameterPanel::append_row()
         row.lock->Show(true);
         row.arm->Show(true);
         values_.push_back(0.);
+        scales_.push_back(1.);
         return;
     }
 #endif
@@ -357,8 +360,16 @@ void ParameterPanel::append_row()
                        wxCommandEventHandler(ParameterPanel::OnLockButton),
                        NULL, this);
 
+    data.text->Connect(wxEVT_CONTEXT_MENU,
+                       wxContextMenuEventHandler(ParameterPanel::OnRightClick),
+                       NULL, this);
+    data.label->Connect(wxEVT_CONTEXT_MENU,
+                       wxContextMenuEventHandler(ParameterPanel::OnRightClick),
+                       NULL, this);
+
     rows_.push_back(data);
     values_.push_back(0.);
+    scales_.push_back(1.);
     if (key_sink_ != NULL) {
         data.lock->Connect(wxEVT_KEY_DOWN, key_sink_method_, NULL, key_sink_);
         data.arm->Connect(wxEVT_KEY_DOWN, key_sink_method_, NULL, key_sink_);
@@ -402,14 +413,26 @@ void ParameterPanel::delete_row_range(int begin, int end)
 #endif
 #endif
     values_.erase(values_.begin() + begin, values_.begin() + end);
+    scales_.erase(scales_.begin() + begin, scales_.begin() + end);
 }
 
 int ParameterPanel::find_in_rows(wxObject* w)
 {
     for (int n = 0; n != get_count(); ++n)
-        if (w == rows_[n].text || w == rows_[n].lock || w == rows_[n].arm)
+        if (w == rows_[n].text || w == rows_[n].lock || w == rows_[n].arm
+                || w == rows_[n].label)
             return n;
     return -1;
+}
+
+void ParameterPanel::OnRightClick(wxContextMenuEvent& event)
+{
+    int n = find_in_rows(event.GetEventObject());
+    if (n < 0) {
+        event.Skip();
+        return;
+    }
+    observer_->on_parameter_context_menu(n);
 }
 
 void ParameterPanel::OnLockButton(wxCommandEvent& event)
@@ -431,15 +454,15 @@ void ParameterPanel::OnTextEnter(wxCommandEvent &event)
     int n = find_in_rows(event.GetEventObject());
     if (n == -1) return;
     wxTextCtrl *tc = rows_[n].text;
-    if (tc->GetValue() == double2wxstr(values_[n]))
+    if (tc->GetValue() == double2wxstr(values_[n] * scales_[n]))
         return;
     double t;
     bool ok = tc->GetValue().ToDouble(&t);
     if (ok) {
-        values_[n] = t;
+        values_[n] = t / scales_[n];
         observer_->on_parameter_changed(n);
     } else
-        tc->ChangeValue(double2wxstr(values_[n]));
+        tc->ChangeValue(double2wxstr(values_[n] * scales_[n]));
 }
 
 void ParameterPanel::OnMouseWheel(wxMouseEvent &event)

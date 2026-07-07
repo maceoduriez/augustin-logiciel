@@ -34,3 +34,7 @@ fityk/cmpfit/*.patch
 *-build-*/
 fityk-?.?.?-setup.exe
 fityk-?.?.?.tar.bz2
+
+# generated macOS bundle / distribution artifacts
+dist/Fityk.app/
+dist/*.zip
