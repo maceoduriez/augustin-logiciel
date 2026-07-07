@@ -81,7 +81,11 @@ static const Option options[] = {
     OPT(width_correction, kDouble, 1., NULL),
     OPT(guess_uses_weights, kBool, true, NULL),
 
-    OPT(fitting_method, kEnum, FitManager::method_list[0][0], fit_method_enum),
+    // default fitting method: mpfit (method_list[1]) instead of the own
+    // Levenberg-Marquardt (method_list[0]).  mpfit is a Levenberg-Marquardt
+    // implementation from MINPACK that honours box constraints (parameter
+    // domains), which are needed for bounded-centre and non-negative peaks.
+    OPT(fitting_method, kEnum, FitManager::method_list[1][0], fit_method_enum),
     OPT(max_wssr_evaluations, kInt, 1000, NULL),
     OPT(max_fitting_time, kDouble, 0., NULL),
     OPT(refresh_period, kInt, 4, NULL),

@@ -54,6 +54,8 @@ public:
     virtual void on_parameter_changing(const std::vector<realt>& values) = 0;
     virtual void on_parameter_changed(int n) = 0;
     virtual void on_parameter_lock_clicked(int n, int state) = 0;
+    // right-click on a parameter row (e.g. to set a range constraint)
+    virtual void on_parameter_context_menu(int /*n*/) {}
 };
 
 struct ParameterRowData
@@ -79,10 +81,14 @@ class ParameterPanel : public wxPanel,
 public:
     ParameterPanel(wxWindow* parent, wxWindowID id,
                    ParameterPanelObserver *observer);
+    // `scale` is a display-only multiplier: the text field shows value*scale
+    // (used to show a Gaussian width as FWHM = 2*hwhm) while the stored value
+    // stays in the function's native units.
     void set_normal_parameter(int n, const wxString& label, double value,
-                              bool locked, const wxString& label2);
+                              bool locked, const wxString& label2,
+                              double scale=1.);
     void set_disabled_parameter(int n, const wxString& label, double value,
-                                const wxString& label2);
+                                const wxString& label2, double scale=1.);
     void delete_row_range(int begin, int end);
     wxString get_label2(int n) const;
     double get_value(int n) const;
@@ -104,6 +110,8 @@ private:
     ParameterPanelObserver* observer_;
     std::vector<ParameterRowData> rows_;
     std::vector<realt> values_;
+    // display-only multiplier per row (see set_normal_parameter)
+    std::vector<double> scales_;
     wxStaticText* title_st_;
     wxFlexGridSizer *grid_sizer_;
     int active_item_;
@@ -117,6 +125,7 @@ private:
     void OnLockButton(wxCommandEvent& event);
     void OnTextEnter(wxCommandEvent &event);
     void OnMouseWheel(wxMouseEvent &event);
+    void OnRightClick(wxContextMenuEvent& event);
 };
 
 // access to xpm bitmaps

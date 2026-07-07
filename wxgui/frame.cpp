@@ -54,6 +54,9 @@
 #include "powdifpat.h"
 #include "fityk/common.h"
 #include "fityk/logic.h"
+#include "fityk/mgr.h"
+#include "fityk/func.h"
+#include "fityk/var.h"
 #include "fityk/fit.h"
 #include "fityk/data.h"
 #include "fityk/settings.h"
@@ -158,6 +161,8 @@ enum {
     ID_S_GUESS                 ,
     ID_S_PFINFO                ,
     ID_S_AUTOFREEZE            ,
+    ID_S_NONNEG                ,
+    ID_WINDOW_MINIMIZE         ,
     ID_S_EXPORTP               ,
     ID_S_EXPORTF               ,
     ID_S_EXPORTD               ,
@@ -316,6 +321,11 @@ BEGIN_EVENT_TABLE(FFrame, wxFrame)
     EVT_MENU (ID_S_GUESS,       FFrame::OnSGuess)
     EVT_MENU (ID_S_PFINFO,      FFrame::OnSPFInfo)
     EVT_MENU (ID_S_AUTOFREEZE,  FFrame::OnAutoFreeze)
+    EVT_MENU (ID_S_NONNEG,      FFrame::OnNonNegPeaks)
+#ifdef __WXMAC__
+    EVT_MENU (wxID_CLOSE,       FFrame::OnCloseWindow)
+    EVT_MENU (ID_WINDOW_MINIMIZE, FFrame::OnMinimize)
+#endif
     EVT_MENU (ID_S_EXPORTP,     FFrame::OnParametersExport)
     EVT_MENU (ID_S_EXPORTF,     FFrame::OnModelExport)
     EVT_MENU (ID_S_EXPORTD,     FFrame::OnDataExport)
@@ -396,6 +406,8 @@ FFrame::FFrame(wxWindow *parent, const wxWindowID id, const wxString& title,
     const int default_peak_nr = 7; // Gaussian
     wxConfigBase *config = wxConfig::Get();
     peak_type_nr_ = config->Read(wxT("/DefaultFunctionType"), default_peak_nr);
+    // constrain peak heights to be non-negative by default
+    nonneg_peaks_ = (config->Read(wxT("/nonNegativePeaks"), 1L) != 0);
     update_peak_type_list();
     // Load icon and bitmap
     SetIcon (wxICON (fityk));
@@ -450,6 +462,7 @@ FFrame::~FFrame()
     recent_scripts_->save_to_config(common_config);
     recent_data_->save_to_config(common_config);
     common_config->Write(wxT("/DefaultFunctionType"), peak_type_nr_);
+    common_config->Write(wxT("/nonNegativePeaks"), nonneg_peaks_ ? 1L : 0L);
     delete print_mgr_;
 #ifdef __WXMAC__
     // On wxCarbon 2.9.2svn assertion pops up on exit
@@ -545,6 +558,16 @@ void FFrame::save_settings(wxConfigBase *cf) const
     //cf->Write (wxT("BotWinHeight"), bottom_window->GetClientSize().GetHeight());
 }
 
+// On macOS several menu accelerators (Ctrl-X/-M/-A/-V, mapped to Cmd) collide
+// with the standard system shortcuts for Cut / Minimize / Select-All / Paste.
+// KACCEL() drops those accelerators on Mac so the standard shortcuts work, and
+// keeps them on the other platforms.
+#ifdef __WXMAC__
+#  define KACCEL(s) wxT("")
+#else
+#  define KACCEL(s) wxT(s)
+#endif
+
 void FFrame::set_menubar()
 {
     recent_data_ = new RecentFiles(ID_D_RECENT+1, "/RecentDataFiles");
@@ -556,7 +579,7 @@ void FFrame::set_menubar()
 
     wxMenu* session_menu = new wxMenu;
     append_mi(session_menu, ID_SESSION_INCLUDE, GET_BMP(runmacro16),
-              wxT("&Execute Script\tCtrl-X"),
+              wxT("&Execute Script") KACCEL("\tCtrl-X"),
               wxT("Execute commands from a file"));
     wxMenu *session_new_script_menu = new wxMenu;
     session_new_script_menu->Append(ID_SESSION_NEW_F, "&Blank Fityk Script");
@@ -611,7 +634,7 @@ void FFrame::set_menubar()
     append_mi(data_menu, ID_D_QLOAD, GET_BMP(fileopen16),
               wxT("&Quick Load File\tCtrl-O"), wxT("Load data from file"));
     append_mi(data_menu, ID_D_XLOAD, GET_BMP(fileopen16),
-              wxT("&Load File\tCtrl-M"),
+              wxT("&Load File") KACCEL("\tCtrl-M"),
               wxT("Load data from file, with some options"));
     data_menu->Append(ID_D_RECENT, "&Recent Files", recent_data_->menu());
     append_mi(data_menu, ID_D_REVERT, GET_BMP(revert16), wxT("Re&vert"),
@@ -650,6 +673,9 @@ void FFrame::set_menubar()
     */
     sum_menu->AppendCheckItem(ID_S_AUTOFREEZE, wxT("Auto-Freeze"),
         wxT("In Data-Range mode: freeze functions in disactivated range"));
+    sum_menu->AppendCheckItem(ID_S_NONNEG, wxT("&Non-negative peaks"),
+        wxT("Constrain peak heights to be >= 0 when fitting"));
+    sum_menu->Check(ID_S_NONNEG, nonneg_peaks_);
     sum_menu->AppendSeparator();
     append_mi(sum_menu, ID_S_EXPORTP, GET_BMP(export16),
               wxT("&Export Peak Parameters"),
@@ -762,8 +788,8 @@ void FFrame::set_menubar()
 
     wxMenu* gui_menu_zoom = new wxMenu;
     append_mi(gui_menu_zoom, ID_G_V_ALL, GET_BMP(zoom_fit16),
-              wxT("Zoom &All\tCtrl-A"), wxT("View whole data"));
-    gui_menu_zoom->Append(ID_G_V_VERT, wxT("Fit &Vertically\tCtrl-V"),
+              wxT("Zoom &All") KACCEL("\tCtrl-A"), wxT("View whole data"));
+    gui_menu_zoom->Append(ID_G_V_VERT, wxT("Fit &Vertically") KACCEL("\tCtrl-V"),
                           wxT("Adjust vertical zoom"));
     gui_menu_zoom->Append(ID_G_V_SCROLL_L, wxT("Scroll &Left\tCtrl-["),
                           wxT("Scroll view left"));
@@ -821,17 +847,38 @@ void FFrame::set_menubar()
 
     help_menu->Append(wxID_ABOUT, wxT("&About..."), wxT("Show about dialog"));
 
+#ifdef __WXMAC__
+    // Standard macOS Edit menu so that Cmd-C/V/X/A work in text fields.
+    // These use the standard wx ids, which wxTextCtrl handles automatically.
+    wxMenu* edit_menu = new wxMenu;
+    edit_menu->Append(wxID_CUT, wxT("Cu&t\tCtrl-X"));
+    edit_menu->Append(wxID_COPY, wxT("&Copy\tCtrl-C"));
+    edit_menu->Append(wxID_PASTE, wxT("&Paste\tCtrl-V"));
+    edit_menu->Append(wxID_SELECTALL, wxT("Select &All\tCtrl-A"));
+    // Standard macOS Window menu: Minimize (Cmd-M) and Close (Cmd-W).
+    wxMenu* window_menu = new wxMenu;
+    window_menu->Append(ID_WINDOW_MINIMIZE, wxT("&Minimize\tCtrl-M"));
+    window_menu->Append(wxID_CLOSE, wxT("&Close Window\tCtrl-W"));
+#endif
+
     wxMenuBar *menu_bar = new wxMenuBar();
     menu_bar->Append (session_menu, wxT("&Session") );
+#ifdef __WXMAC__
+    menu_bar->Append (edit_menu, wxT("&Edit"));
+#endif
     menu_bar->Append (data_menu, wxT("&Data") );
     menu_bar->Append (sum_menu, wxT("&Functions") );
     menu_bar->Append (fit_menu, wxT("F&it") );
     menu_bar->Append (tools_menu, wxT("&Tools") );
     menu_bar->Append (gui_menu, wxT("&GUI"));
+#ifdef __WXMAC__
+    menu_bar->Append (window_menu, wxT("&Window"));
+#endif
     menu_bar->Append (help_menu, wxT("&Help"));
 
     SetMenuBar(menu_bar);
 }
+#undef KACCEL
 
 static void clear_menu(wxMenu *menu)
 {
@@ -1200,6 +1247,52 @@ void FFrame::OnAutoFreeze(wxCommandEvent& event)
     plot_pane_->get_plot()->set_auto_freeze(event.IsChecked());
 }
 
+void FFrame::OnNonNegPeaks(wxCommandEvent& event)
+{
+    nonneg_peaks_ = event.IsChecked();
+    if (nonneg_peaks_)
+        // apply the >= 0 constraint to existing peaks right away
+        apply_nonneg_if_on();
+    else {
+        // release the auto-applied lower bound (lo==0, hi==+inf) so that
+        // heights are free again; keep any bound the user set on purpose
+        v_foreach (fityk::Function*, i, ftk->mgr.functions()) {
+            const fityk::Function* f = *i;
+            if (!contains_element(f->tp()->fargs, std::string("height")))
+                continue;
+            const fityk::Variable* var =
+                                    ftk->mgr.find_variable(f->var_name("height"));
+            if (var && var->is_simple() &&
+                    var->domain.lo == 0. && var->domain.hi_inf())
+                exec("%" + f->name + ".height = ~" + eS(var->value()) + " [:]");
+        }
+    }
+}
+
+// If the "non-negative peaks" option is on, make sure every peak height is
+// constrained to [0:+inf). Called right before a fit is run. mpfit (the
+// default fitting method) honours these box constraints.
+void FFrame::apply_nonneg_if_on()
+{
+    if (!nonneg_peaks_)
+        return;
+    v_foreach (fityk::Function*, i, ftk->mgr.functions()) {
+        const fityk::Function* f = *i;
+        if (!contains_element(f->tp()->fargs, std::string("height")))
+            continue;
+        const fityk::Variable* var =
+                                    ftk->mgr.find_variable(f->var_name("height"));
+        // only touch a plain fittable height that isn't already bounded >= 0
+        if (!var || !var->is_simple() || var->domain.lo >= 0.)
+            continue;
+        realt val = var->value();
+        if (val < 0.)
+            val = 0.;
+        std::string hi = var->domain.hi_inf() ? "" : eS(var->domain.hi);
+        exec("%" + f->name + ".height = ~" + eS(val) + " [0:" + hi + "]");
+    }
+}
+
 void FFrame::OnModelExport(wxCommandEvent&)
 {
     ModelInfoDlg dlg(this, -1);
@@ -1273,6 +1366,7 @@ void FFrame::OnFRun (wxCommandEvent&)
 {
     FitRunDlg dlg(this, -1);
     if (dlg.ShowModal() == wxID_OK) {
+        apply_nonneg_if_on();
         string cmd = dlg.get_cmd();
         exec(cmd);
     }
@@ -1407,6 +1501,16 @@ void FFrame::OnReset (wxCommandEvent&)
 void FFrame::OnNewWindow (wxCommandEvent&)
 {
     open_new_instance();
+}
+
+void FFrame::OnCloseWindow (wxCommandEvent&)
+{
+    Close(true);
+}
+
+void FFrame::OnMinimize (wxCommandEvent&)
+{
+    Iconize(true);
 }
 #endif
 
@@ -2441,6 +2545,7 @@ void FToolBar::OnClickTool (wxCommandEvent& event)
             break;
         }
         case ID_T_RUN:
+            frame->apply_nonneg_if_on();
             if (ftk->are_independent(frame->get_selected_datas()))
                 exec(frame->get_datasets() + "fit");
             else {

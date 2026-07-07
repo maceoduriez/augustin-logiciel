@@ -80,6 +80,10 @@ public:
     void OnSGuess        (wxCommandEvent& event);
     void OnSPFInfo       (wxCommandEvent& event);
     void OnAutoFreeze    (wxCommandEvent& event);
+    void OnNonNegPeaks   (wxCommandEvent& event);
+    // ensure peak heights are constrained to be >= 0 (called before fitting)
+    void apply_nonneg_if_on();
+    bool nonneg_peaks() const { return nonneg_peaks_; }
     void OnParametersExport (wxCommandEvent& event);
     void OnModelExport   (wxCommandEvent& event);
 
@@ -115,6 +119,8 @@ public:
     void OnReset       (wxCommandEvent&);
 #ifdef __WXMAC__
     void OnNewWindow   (wxCommandEvent&);
+    void OnCloseWindow (wxCommandEvent&);
+    void OnMinimize    (wxCommandEvent&);
 #endif
     void OnSessionLoad(wxCommandEvent&);
     void OnSessionSave(wxCommandEvent&);
@@ -229,6 +235,7 @@ private:
     wxString script_dir_, data_dir_, export_dir_;
     wxString last_session_path_;
     bool antialias_;
+    bool nonneg_peaks_;
 
     void place_plot_and_io_windows(wxWindow *parent);
     void create_io_panel(wxWindow *parent);
