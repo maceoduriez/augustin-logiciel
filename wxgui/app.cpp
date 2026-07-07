@@ -200,7 +200,10 @@ FApp::FApp()
 bool FApp::OnInit(void)
 {
     fityk::interrupt_computations_on_sigint();
-    SetAppName("fityk");
+    // Distinct app name (was "fityk") so this custom build keeps its own
+    // preferences/config directory and does not collide with a stock Fityk
+    // installed on the same machine.
+    SetAppName("Fityk+");
 
     // if options can be parsed
     wxCmdLineParser cmdLineParser(cmdLineDesc, argc, argv);

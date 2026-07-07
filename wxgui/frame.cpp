@@ -163,6 +163,7 @@ enum {
     ID_S_AUTOFREEZE            ,
     ID_S_NONNEG                ,
     ID_WINDOW_MINIMIZE         ,
+    ID_WINDOW_CLOSE            ,
     ID_S_EXPORTP               ,
     ID_S_EXPORTF               ,
     ID_S_EXPORTD               ,
@@ -323,7 +324,7 @@ BEGIN_EVENT_TABLE(FFrame, wxFrame)
     EVT_MENU (ID_S_AUTOFREEZE,  FFrame::OnAutoFreeze)
     EVT_MENU (ID_S_NONNEG,      FFrame::OnNonNegPeaks)
 #ifdef __WXMAC__
-    EVT_MENU (wxID_CLOSE,       FFrame::OnCloseWindow)
+    EVT_MENU (ID_WINDOW_CLOSE,  FFrame::OnCloseWindow)
     EVT_MENU (ID_WINDOW_MINIMIZE, FFrame::OnMinimize)
 #endif
     EVT_MENU (ID_S_EXPORTP,     FFrame::OnParametersExport)
@@ -411,6 +412,14 @@ FFrame::FFrame(wxWindow *parent, const wxWindowID id, const wxString& title,
     update_peak_type_list();
     // Load icon and bitmap
     SetIcon (wxICON (fityk));
+
+#ifdef __WXMAC__
+    // Don't use the native macOS full-screen (green button), which auto-hides
+    // the menu bar (it only reappears on hover). With this disabled the green
+    // button maximizes the window and the menu bar stays visible. A real
+    // full-screen is still available via the "Full Screen" menu (Cmd+Ctrl+F).
+    EnableFullScreenView(false);
+#endif
 
     script_dir_ = config->Read(wxT("/execScriptDir"));
     export_dir_ = config->Read(wxT("/exportDir"));
@@ -622,7 +631,12 @@ void FFrame::set_menubar()
               wxT("Sa&ve as Image..."), wxT("Save plot as PNG image."));
     session_menu->AppendSeparator();
     append_mi(session_menu, ID_SESSION_SET, GET_BMP(preferences16),
-              wxT("&Settings"), wxT("Preferences and options"));
+#ifdef __WXMAC__
+              wxT("&Settings\tCtrl+,"),  // Cmd+, — standard macOS Preferences
+#else
+              wxT("&Settings"),
+#endif
+              wxT("Preferences and options"));
     session_menu->Append (ID_SESSION_EI, wxT("Edit &Init File"),
                          wxT("Edit the script run at startup"));
     session_menu->AppendSeparator();
@@ -782,8 +796,17 @@ void FFrame::set_menubar()
                                               wxT("Show crosshair cursor"));
     gui_menu->AppendCheckItem(ID_G_ANTIALIAS, wxT("&Anti-aliasing"),
                                               wxT("Switch anti-aliasing"));
+#ifdef __WXMAC__
+    // macOS-standard full-screen shortcut (Ctrl+Cmd+F). Here full-screen is
+    // the deliberate, keyboard-invoked immersive mode; the normal (maximized)
+    // window keeps its menu bar visible (see EnableFullScreenView above).
+    gui_menu->AppendCheckItem(ID_G_FULLSCRN,
+                              wxT("&Full Screen\tRawCtrl+Ctrl+F"),
+                              wxT("Switch full screen"));
+#else
     gui_menu->AppendCheckItem(ID_G_FULLSCRN, wxT("&Full Screen\tF11"),
                                               wxT("Switch full screen"));
+#endif
     gui_menu->AppendSeparator();
 
     wxMenu* gui_menu_zoom = new wxMenu;
@@ -858,7 +881,7 @@ void FFrame::set_menubar()
     // Standard macOS Window menu: Minimize (Cmd-M) and Close (Cmd-W).
     wxMenu* window_menu = new wxMenu;
     window_menu->Append(ID_WINDOW_MINIMIZE, wxT("&Minimize\tCtrl-M"));
-    window_menu->Append(wxID_CLOSE, wxT("&Close Window\tCtrl-W"));
+    window_menu->Append(ID_WINDOW_CLOSE, wxT("&Close Window\tCtrl-W"));
 #endif
 
     wxMenuBar *menu_bar = new wxMenuBar();

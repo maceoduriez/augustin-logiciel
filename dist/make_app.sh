@@ -10,7 +10,7 @@
 set -e
 cd "$(dirname "$0")/.."          # repo root
 ROOT="$PWD"
-APP="$ROOT/dist/Fityk.app"
+APP="$ROOT/dist/Fityk +.app"
 
 test -x wxgui/.libs/fityk || { echo "Build first (make). wxgui/.libs/fityk missing."; exit 1; }
 
@@ -41,8 +41,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Fityk</string>
-  <key>CFBundleDisplayName</key><string>Fityk (peak fitting)</string>
+  <key>CFBundleName</key><string>Fityk +</string>
+  <key>CFBundleDisplayName</key><string>Fityk +</string>
   <key>CFBundleExecutable</key><string>fityk</string>
   <key>CFBundleIdentifier</key><string>pl.nieto.fityk.custom</string>
   <key>CFBundleVersion</key><string>1.3.2</string>
