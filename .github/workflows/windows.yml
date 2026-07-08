@@ -54,6 +54,11 @@ jobs:
         ./configure --disable-python --disable-CLI \
             --disable-dependency-tracking \
             --with-wx-config=/mingw64/bin/wx-config
+        echo "=== debug: wx-config outputs (cat -A shows hidden chars) ==="
+        /mingw64/bin/wx-config --libs | cat -A | head -5
+        /mingw64/bin/wx-config --rescomp | cat -A | head -5 || true
+        echo "=== debug: Makefile lines 660-700 ==="
+        sed -n '660,700p' Makefile | cat -A
         make -j4
 
     - name: package portable zip
