@@ -58,6 +58,7 @@ public:
     //void OnSize (wxSizeEvent& event);
 
     void OnShowHelp(wxCommandEvent& event);
+    void OnFitProtocol(wxCommandEvent& event);
     void OnAbout(wxCommandEvent& event);
     void OnOnline(wxCommandEvent& event);
     void OnExample(wxCommandEvent& event);

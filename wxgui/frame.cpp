@@ -136,6 +136,7 @@ static const wxString issues_url(
 enum {
     // menu
     ID_H_MANUAL        = 24001 ,
+    ID_H_PROTOCOL              ,
     ID_H_WEBSITE               ,
     ID_H_WIKI                  ,
     ID_H_DISCUSSIONS           ,
@@ -388,6 +389,7 @@ BEGIN_EVENT_TABLE(FFrame, wxFrame)
     EVT_MENU (ID_G_SCONFAS,     FFrame::OnSaveConfigAs)
 
     EVT_MENU (ID_H_MANUAL,      FFrame::OnShowHelp)
+    EVT_MENU (ID_H_PROTOCOL,    FFrame::OnFitProtocol)
     EVT_MENU (ID_H_WEBSITE,     FFrame::OnOnline)
     EVT_MENU (ID_H_WIKI,        FFrame::OnOnline)
     EVT_MENU (ID_H_DISCUSSIONS, FFrame::OnOnline)
@@ -864,6 +866,9 @@ void FFrame::set_menubar()
 
     append_mi(help_menu, ID_H_MANUAL, GET_BMP(book16), wxT("&Manual"),
               wxT("User's Manual"));
+    append_mi(help_menu, ID_H_PROTOCOL, GET_BMP(book16),
+              wxT("&Protocole de fit (convergence)"),
+              wxT("Limites du fit contraint et protocole de convergence"));
     append_mi(help_menu, ID_H_WEBSITE, GET_BMP(web16), wxT("&Visit Website"),
               website_url);
     append_mi(help_menu, ID_H_WIKI, GET_BMP(web16), wxT("&Visit Wiki"),
@@ -968,6 +973,81 @@ void FFrame::OnShowHelp(wxCommandEvent&)
     if (!r)
         wxMessageBox(wxT("Can't open browser.\nManual is here:\n") + help_url,
                      wxT("Manual"), wxOK|wxICON_INFORMATION);
+}
+
+// Help > Protocole de fit : limites du fit contraint (mesurees sur le moteur
+// mpfit) et protocole pour optimiser la convergence. Texte en francais,
+// destine a l'utilisateur du logiciel. Meme contenu que dist/PROTOCOLE-fit.md.
+void FFrame::OnFitProtocol(wxCommandEvent&)
+{
+    static const char* protocol_utf8 =
+"LIMITES DU FIT CONTRAINT\n"
+"(mesurees avec la methode par defaut mpfit = Levenberg-Marquardt a bornes)\n"
+"\n"
+"1. Valeur initiale hors de sa fenetre \xc2\xb1\n"
+"   Le fit s'arrete immediatement (\xc2\xab initial values inconsistent with\n"
+"   constraints \xc2\xbb) : rien ne bouge. Depuis la version r6, la fenetre \xc2\xb1\n"
+"   suit la valeur retapee, et tout parametre hors bornes est ramene a la\n"
+"   borne la plus proche avant le fit (avertissement en console).\n"
+"\n"
+"2. Fenetres \xc2\xb1 trop etroites\n"
+"   Avec un \xc2\xb1 quasi nul, le fit \xc2\xab converge \xc2\xbb en 3-4 evaluations sans rien\n"
+"   faire. Regle : \xc2\xb1 d'un centre >= ~1/10 du FWHM attendu. Pour figer\n"
+"   completement un parametre : utiliser le cadenas (lock), pas un \xc2\xb1 minuscule.\n"
+"\n"
+"3. Parametre colle a une borne apres le fit\n"
+"   Le minimum voulu par les donnees est a l'exterieur de la fenetre :\n"
+"   le resultat est dicte par la contrainte et l'incertitude de ce parametre\n"
+"   n'est plus fiable. Elargir la fenetre ou assumer la contrainte.\n"
+"\n"
+"4. Pic surnumeraire\n"
+"   Avec hauteurs >= 0, un pic sans realite physique finit a hauteur ~0 :\n"
+"   le supprimer et refitter.\n"
+"\n"
+"5. Ce qui ne pose PAS de probleme (teste)\n"
+"   - Beaucoup de contraintes coherentes (3 gaussiennes : centres \xc2\xb1" "0.2,\n"
+"     hauteurs >= 0, FWHM bornes) : convergence normale.\n"
+"   - Valeur initiale posee exactement sur une borne.\n"
+"   - Hauteurs >= 0 par defaut : resultats identiques a l'optimiseur\n"
+"     d'origine sur un fit bien initialise (verifie numeriquement).\n"
+"\n"
+"   ATTENTION : seule la methode mpfit (par defaut) respecte les fenetres \xc2\xb1.\n"
+"   Lev-Mar \xc2\xab own \xc2\xbb et Nelder-Mead les ignorent (menu Fit > Method).\n"
+"\n"
+"PROTOCOLE POUR CONVERGER\n"
+"\n"
+"  1. Delimiter la zone active (mode Range) : la region des pics + un peu\n"
+"     de fond de part et d'autre.\n"
+"  2. Soustraire le fond d'abord (mode Background) s'il n'est pas plat.\n"
+"  3. Fit LIBRE d'abord : gaussiennes initialisees pres des vrais pics\n"
+"     (centre a \xc2\xb1" "1 FWHM, hauteur au bon ordre de grandeur), sans\n"
+"     contraintes de centre. C'est le resultat de reference.\n"
+"  4. Contraindre ensuite, progressivement : ajouter le \xc2\xb1 sur les centres\n"
+"     a fixer, refitter, verifier que le WSSR ne remonte pas anormalement.\n"
+"  5. Une contrainte a la fois quand ca coince : si le fit se bloque apres\n"
+"     un ajout, c'est lui le coupable - l'elargir ou le retirer.\n"
+"  6. Verifier les bornes actives a la fin (point 3 ci-dessus).\n"
+"  7. Supprimer les pics a hauteur ~0 et refitter.\n"
+"  8. En cas de blocage : Fit > Method > Nelder-Mead quelques iterations\n"
+"     pour se degager, puis revenir a mpfit pour le resultat final.\n"
+"\n"
+"EN UNE LIGNE\n"
+"  Fit libre d'abord, contraintes ensuite et une par une, fenetres \xc2\xb1\n"
+"  genereuses, cadenas pour figer, et se mefier d'un parametre qui finit\n"
+"  sur sa borne.\n";
+
+    wxDialog dlg(this, -1, wxT("Protocole de fit (convergence)"),
+                 wxDefaultPosition, wxSize(680, 560),
+                 wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER);
+    wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
+    wxTextCtrl *tc = new wxTextCtrl(&dlg, -1,
+                                    wxString::FromUTF8(protocol_utf8),
+                                    wxDefaultPosition, wxDefaultSize,
+                                    wxTE_MULTILINE|wxTE_READONLY);
+    sizer->Add(tc, 1, wxEXPAND|wxALL, 10);
+    sizer->Add(dlg.CreateButtonSizer(wxOK), 0, wxALL|wxALIGN_CENTER, 5);
+    dlg.SetSizer(sizer);
+    dlg.ShowModal();
 }
 
 void FFrame::OnAbout(wxCommandEvent&)
