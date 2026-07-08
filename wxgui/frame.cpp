@@ -443,7 +443,14 @@ FFrame::FFrame(wxWindow *parent, const wxWindowID id, const wxString& title,
 
     toolbar_ = new FToolBar(this, -1);
     toolbar_->update_peak_type(peak_type_nr_, &peak_types_);
+#ifdef __WXMAC__
+    // Keep the toolbar as a plain sizer row below the title bar (like the
+    // original Fityk layout), instead of SetToolBar() which merges it into
+    // the macOS unified title/toolbar area and squeezes the window title.
+    sizer->Insert(0, toolbar_, 0, wxEXPAND);
+#else
     SetToolBar(toolbar_);
+#endif
     // Realize() is called here and in SwitchToolbar() not in FToolBar ctor
     // as a workaround for wxOSX/Cocoa problem:
     // http://trac.wxwidgets.org/ticket/13888
@@ -1791,6 +1798,23 @@ void FFrame::OnSplineBg(wxCommandEvent& event)
 
 void FFrame::SwitchToolbar(bool show)
 {
+#ifdef __WXMAC__
+    // the toolbar is a plain sizer row here, not attached via SetToolBar()
+    // (see the constructor)
+    if (show && toolbar_ == NULL) {
+        toolbar_ = new FToolBar(this, -1);
+        GetSizer()->Insert(0, toolbar_, 0, wxEXPAND);
+        toolbar_->Realize();
+        update_toolbar();
+        update_peak_type_list();
+        Layout();
+    } else if (!show && toolbar_ != NULL) {
+        GetSizer()->Detach(toolbar_);
+        toolbar_->Destroy();
+        toolbar_ = NULL;
+        Layout();
+    }
+#else
     if (show && !GetToolBar()) {
         toolbar_ = new FToolBar(this, -1);
         SetToolBar(toolbar_);
@@ -1803,6 +1827,7 @@ void FFrame::SwitchToolbar(bool show)
         delete toolbar_;
         toolbar_ = NULL;
     }
+#endif
     GetMenuBar()->Check(ID_G_S_TOOLBAR, show);
 }
 
