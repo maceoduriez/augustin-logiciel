@@ -54,10 +54,13 @@ jobs:
         # SWIG is passed explicitly to skip configure's AX_PKG_SWIG probe:
         # on MSYS2 `swig -swiglib` prints two lines, which ends up embedded
         # in SWIG_LIB in the generated Makefile -> "missing separator".
+        # -std=gnu++14: le code utilise des specs d'exception dynamiques
+        # (throw(...)) supprimees en C++17, defaut des GCC recents.
         ./configure --disable-python --disable-CLI \
             --disable-dependency-tracking \
             --with-wx-config=/mingw64/bin/wx-config \
-            SWIG=/mingw64/bin/swig
+            SWIG=/mingw64/bin/swig \
+            CXXFLAGS="-g -O2 -std=gnu++14"
         make -j4
 
     - name: package portable zip
