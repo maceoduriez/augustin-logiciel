@@ -12,6 +12,7 @@
 // Modified by Cristiano Fontana 17/11/2016
 // Eliminated the dependency on ROOT
 
+#define BUILDING_LIBFITYK
 #include <cmath>
 #include <vector>
 
