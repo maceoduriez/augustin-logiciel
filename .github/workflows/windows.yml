@@ -65,29 +65,32 @@ jobs:
 
     - name: package portable zip
       run: |
+        # the msys2 wrapper runs with -e -o pipefail: relax it, we check
+        # explicitly at the end
+        set +e +o pipefail
         mkdir -p pkg
-        echo "=== exe/dll produits par le build ==="
-        find wxgui fityk -name '*.exe' -o -name '*.dll' | head -20
-        # main executable (location depends on libtool wrapping)
         EXE=$(find wxgui -name 'fityk.exe' | head -1)
-        if [ -z "$EXE" ]; then echo "fityk.exe introuvable"; exit 1; fi
         echo "exe: $EXE"
-        cp "$EXE" pkg/
-        # libfityk + xylib DLLs
-        find fityk -name '*.dll' -exec cp {} pkg/ \;
-        cp /mingw64/bin/libxy*.dll pkg/ 2>/dev/null || true
+        cp -v "$EXE" pkg/
+        find fityk -name '*.dll' -exec cp -v {} pkg/ \;
+        cp -v /mingw64/bin/libxy*.dll pkg/
         # all mingw64 DLLs the exe (and copied DLLs) depend on, recursively
         for i in 1 2 3; do
-          for f in pkg/*.exe pkg/*.dll; do
-            ldd "$f" 2>/dev/null | grep -i '/mingw64/' | awk '{print $3}'
-          done | sort -u | while read d; do cp -n "$d" pkg/ 2>/dev/null || true; done
+          deps=$(ldd pkg/*.exe pkg/*.dll 2>/dev/null | grep -i '/mingw64/' | awk '{print $3}' | sort -u)
+          for d in $deps; do cp -n "$d" pkg/; done
         done
         ls -la pkg/
+        # explicit success criteria
+        test -f pkg/fityk.exe || { echo "MISSING pkg/fityk.exe"; exit 1; }
+        test -f pkg/libfityk-4.dll || { echo "MISSING libfityk dll"; exit 1; }
+        echo "packaging OK"
 
-    - name: smoke test (exe loads)
+    - name: smoke test (DLL closure)
       run: |
-        # just check the PE header and DLL closure with ldd (no display on CI)
-        ldd pkg/fityk.exe | grep -i "not found" && exit 1 || echo "DLL closure OK"
+        set +e +o pipefail
+        missing=$(ldd pkg/fityk.exe | grep -i "not found")
+        if [ -n "$missing" ]; then echo "DLLs manquantes: $missing"; exit 1; fi
+        echo "DLL closure OK"
 
     - uses: actions/upload-artifact@v4
       with:
