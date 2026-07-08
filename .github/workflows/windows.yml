@@ -31,6 +31,12 @@ jobs:
           mingw-w64-x86_64-bzip2
           mingw-w64-x86_64-swig
 
+    - name: force LF line endings on checkout
+      shell: bash
+      run: |
+        git config --global core.autocrlf input
+        git config --global core.eol lf
+
     - uses: actions/checkout@v4
 
     - name: build xylib (from source)
