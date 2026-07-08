@@ -51,14 +51,13 @@ jobs:
     - name: build fityk
       run: |
         autoreconf -i
+        # SWIG is passed explicitly to skip configure's AX_PKG_SWIG probe:
+        # on MSYS2 `swig -swiglib` prints two lines, which ends up embedded
+        # in SWIG_LIB in the generated Makefile -> "missing separator".
         ./configure --disable-python --disable-CLI \
             --disable-dependency-tracking \
-            --with-wx-config=/mingw64/bin/wx-config
-        echo "=== debug: wx-config outputs (cat -A shows hidden chars) ==="
-        /mingw64/bin/wx-config --libs | cat -A | head -5
-        /mingw64/bin/wx-config --rescomp | cat -A | head -5 || true
-        echo "=== debug: Makefile lines 660-700 ==="
-        sed -n '660,700p' Makefile | cat -A
+            --with-wx-config=/mingw64/bin/wx-config \
+            SWIG=/mingw64/bin/swig
         make -j4
 
     - name: package portable zip
