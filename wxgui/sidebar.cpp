@@ -977,7 +977,28 @@ void SideBar::on_parameter_changing(const std::vector<realt>& values)
 void SideBar::on_parameter_changed(int n)
 {
     string vname = wx2s(param_panel_->get_label2(n));
-    exec(vname + " = ~" + eS(param_panel_->get_value(n)));
+    double value = param_panel_->get_value(n);
+    // If the parameter carries a range constraint (domain), re-assigning the
+    // value keeps the old domain. A value typed outside of it would make the
+    // next fit abort instantly ("initial values inconsistent w constraints").
+    // For a two-sided window (lock +/- delta) the window follows the value;
+    // for a one-sided bound the value is clamped into the allowed range.
+    const Variable* var = ftk->mgr.find_variable(vname.substr(1));
+    if (var != NULL && var->is_simple()) {
+        const RealRange& dom = var->domain;
+        if (!dom.lo_inf() && !dom.hi_inf() &&
+                (value < dom.lo || value > dom.hi)) {
+            double half = (dom.hi - dom.lo) / 2;
+            exec(vname + " = ~" + eS(value) + " [" + eS(value - half) + ":"
+                 + eS(value + half) + "]");
+            return;
+        }
+        if (!dom.lo_inf() && value < dom.lo)
+            value = dom.lo;
+        if (!dom.hi_inf() && value > dom.hi)
+            value = dom.hi;
+    }
+    exec(vname + " = ~" + eS(value));
 }
 
 void SideBar::on_parameter_lock_clicked(int n, int state)
