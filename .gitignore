@@ -38,3 +38,6 @@ fityk-?.?.?.tar.bz2
 # generated macOS bundle / distribution artifacts
 dist/*.app/
 dist/*.zip
+
+# local Claude instructions (not versioned)
+CLAUDE.local.md
