@@ -2376,9 +2376,7 @@ void FFrame::activate_function(int n)
 
 void FFrame::update_app_title()
 {
-    // "Fityk +" build marker (bump the r-tag each release) so one can tell at
-    // a glance that the customized build is running.
-    string title = "Fityk +  [r3]";
+    string title = "Fityk +";
     int pos = get_focused_data_index();
     string const& filename = ftk->dk.data(pos)->get_filename();
     if (!filename.empty())

@@ -31,8 +31,8 @@ dylibbundler -od -b -x "$APP/Contents/MacOS/fityk" \
 ICON=/tmp/fityk.iconset
 rm -rf "$ICON"; mkdir -p "$ICON"
 for s in 16 32 128 256 512; do
-  sips -z $s $s fityk.png --out "$ICON/icon_${s}x${s}.png" >/dev/null 2>&1 || true
-  d=$((s*2)); sips -z $d $d fityk.png --out "$ICON/icon_${s}x${s}@2x.png" >/dev/null 2>&1 || true
+  sips -z $s $s "$ROOT/dist/fityk-plus.png" --out "$ICON/icon_${s}x${s}.png" >/dev/null 2>&1 || true
+  d=$((s*2)); sips -z $d $d "$ROOT/dist/fityk-plus.png" --out "$ICON/icon_${s}x${s}@2x.png" >/dev/null 2>&1 || true
 done
 iconutil -c icns "$ICON" -o "$APP/Contents/Resources/fityk.icns" 2>/dev/null || true
 
