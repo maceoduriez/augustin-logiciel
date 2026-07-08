@@ -1,0 +1,76 @@
+name: Windows build
+
+# Build the Fityk + GUI for Windows (64-bit) with MSYS2/MinGW64 and upload a
+# portable zip (fityk.exe + DLLs) as an artifact.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['win-*']
+
+jobs:
+  windows:
+    name: "Windows (MinGW64)"
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          git
+          base-devel
+          autotools
+          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-wxwidgets3.2-msw
+          mingw-w64-x86_64-boost
+          mingw-w64-x86_64-lua
+          mingw-w64-x86_64-zlib
+          mingw-w64-x86_64-bzip2
+          mingw-w64-x86_64-swig
+
+    - uses: actions/checkout@v4
+
+    - name: build xylib (from source)
+      run: |
+        git clone --depth 1 https://github.com/wojdyr/xylib.git /tmp/xylib
+        cd /tmp/xylib
+        autoreconf -i
+        ./configure --without-gui --prefix=/mingw64
+        make -j4
+        make install
+
+    - name: build fityk
+      run: |
+        autoreconf -i
+        ./configure --disable-python --disable-CLI \
+            --with-wx-config=/mingw64/bin/wx-config
+        make -j4
+
+    - name: package portable zip
+      run: |
+        mkdir -p pkg
+        # main executable (libtool puts the real binary in .libs)
+        if [ -f wxgui/.libs/fityk.exe ]; then cp wxgui/.libs/fityk.exe pkg/; else cp wxgui/fityk.exe pkg/; fi
+        # libfityk + xylib DLLs
+        cp fityk/.libs/*.dll pkg/ 2>/dev/null || true
+        cp /mingw64/bin/libxy-*.dll pkg/ 2>/dev/null || true
+        # all mingw64 DLLs the exe (and copied DLLs) depend on, recursively
+        for i in 1 2 3; do
+          for f in pkg/*.exe pkg/*.dll; do
+            ldd "$f" 2>/dev/null | grep -i '/mingw64/' | awk '{print $3}'
+          done | sort -u | while read d; do cp -n "$d" pkg/ 2>/dev/null || true; done
+        done
+        ls -la pkg/
+
+    - name: smoke test (exe loads)
+      run: |
+        # just check the PE header and DLL closure with ldd (no display on CI)
+        ldd pkg/fityk.exe | grep -i "not found" && exit 1 || echo "DLL closure OK"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: fityk-plus-windows
+        path: pkg/
