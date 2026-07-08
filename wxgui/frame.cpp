@@ -174,6 +174,7 @@ enum {
     ID_F_UNDO                  ,
     ID_F_REDO                  ,
     ID_F_HISTORY               ,
+    ID_F_WARN                  ,
     ID_T_PD                    ,
     ID_T_KEBE                  ,
     ID_F_M                     ,
@@ -343,6 +344,7 @@ BEGIN_EVENT_TABLE(FFrame, wxFrame)
     EVT_MENU (ID_F_REDO,        FFrame::OnFRedo)
     EVT_UPDATE_UI (ID_F_HISTORY, FFrame::OnMenuFitHistoryUpdate)
     EVT_MENU (ID_F_HISTORY,     FFrame::OnFHistory)
+    EVT_MENU (ID_F_WARN,        FFrame::OnWarnFitIssues)
 
     EVT_MENU (ID_T_PD,          FFrame::OnPowderDiffraction)
     EVT_MENU (ID_T_KEBE,        FFrame::OnXpsKEBE)
@@ -411,6 +413,8 @@ FFrame::FFrame(wxWindow *parent, const wxWindowID id, const wxString& title,
     peak_type_nr_ = config->Read(wxT("/DefaultFunctionType"), default_peak_nr);
     // constrain peak heights to be non-negative by default
     nonneg_peaks_ = (config->Read(wxT("/nonNegativePeaks"), 1L) != 0);
+    // warn (pop-up) about fit problems by default
+    warn_fit_issues_ = (config->Read(wxT("/warnFitIssues"), 1L) != 0);
     update_peak_type_list();
     // Load icon and bitmap
     SetIcon (wxICON (fityk));
@@ -481,6 +485,7 @@ FFrame::~FFrame()
     recent_data_->save_to_config(common_config);
     common_config->Write(wxT("/DefaultFunctionType"), peak_type_nr_);
     common_config->Write(wxT("/nonNegativePeaks"), nonneg_peaks_ ? 1L : 0L);
+    common_config->Write(wxT("/warnFitIssues"), warn_fit_issues_ ? 1L : 0L);
     delete print_mgr_;
 #ifdef __WXMAC__
     // On wxCarbon 2.9.2svn assertion pops up on exit
@@ -735,6 +740,12 @@ void FFrame::set_menubar()
                             wxT("Redo change of parameter"));
     fit_menu->Append (ID_F_HISTORY, wxT("&Parameter History"),
                             wxT("Go back or forward in parameter history"));
+    fit_menu->AppendSeparator();
+    fit_menu->AppendCheckItem(ID_F_WARN,
+                wxT("&Avertir des problèmes après un fit"),
+                wxT("Pop-up après un fit si un paramètre est collé à une "
+                    "borne ou un pic à hauteur ~ 0"));
+    fit_menu->Check(ID_F_WARN, warn_fit_issues_);
 
     wxMenu* tools_menu = new wxMenu;
     append_mi(tools_menu, ID_T_PD, wxBitmap(powdifpat16_xpm),
@@ -1427,6 +1438,95 @@ void FFrame::apply_nonneg_if_on()
     }
 }
 
+void FFrame::OnWarnFitIssues(wxCommandEvent& event)
+{
+    warn_fit_issues_ = event.IsChecked();
+}
+
+// Called right after a fit. Detects the failure modes described in the fit
+// protocol and, if the option is on, shows a pop-up so they can't be missed:
+//   - a fittable parameter that ended up stuck on the edge of its +/- window
+//     (the constraint dictates the result; its uncertainty is meaningless);
+//   - a peak whose height was pushed to ~0 (probably a superfluous peak).
+void FFrame::check_fit_warnings()
+{
+    if (!warn_fit_issues_)
+        return;
+
+    std::vector<std::string> issues;
+    const std::vector<fityk::Function*>& funcs = ftk->mgr.functions();
+
+    // largest peak height, to judge what "~ 0" means
+    realt max_h = 0;
+    v_foreach (fityk::Function*, i, funcs) {
+        realt h;
+        if ((*i)->get_height(&h) && fabs(h) > max_h)
+            max_h = fabs(h);
+    }
+
+    v_foreach (fityk::Function*, i, funcs) {
+        const fityk::Function* f = *i;
+
+        // (1) peak height pushed to ~0
+        realt h;
+        bool height_is_zero = false;
+        if (contains_element(f->tp()->fargs, std::string("height"))
+                && f->get_height(&h)) {
+            const fityk::Variable* hv =
+                                    ftk->mgr.find_variable(f->var_name("height"));
+            if (hv && hv->is_simple() && !hv->domain.lo_inf()
+                    && hv->domain.lo <= 0. && max_h > 0 && fabs(h) <= 1e-4*max_h) {
+                height_is_zero = true;
+                issues.push_back("%" + f->name + " : hauteur ≈ 0 (" + S(h) +
+                    ") — pic probablement superflu, envisager de le supprimer.");
+            }
+        }
+
+        // (2) any fittable parameter sitting on the edge of its +/- window
+        for (int k = 0; k < f->nv(); ++k) {
+            const fityk::Variable* var =
+                            ftk->mgr.get_variable(f->used_vars().get_idx(k));
+            if (!var->is_simple())
+                continue;
+            const RealRange& d = var->domain;
+            if (d.lo_inf() || d.hi_inf())   // only two-sided +/- windows here
+                continue;
+            double w = d.hi - d.lo;
+            if (w <= 0)
+                continue;
+            double val = var->value();
+            std::string pname = f->get_param(k);
+            // show a width in FWHM, like the rest of the GUI
+            double sc = (pname == "hwhm") ? 2. : 1.;
+            if (pname == "hwhm")
+                pname = "fwhm";
+            if (height_is_zero && f->get_param(k) == "height")
+                continue; // already reported as "~ 0"
+            const char* which = 0;
+            if (val - d.lo <= 1e-3 * w)
+                which = "basse";
+            else if (d.hi - val <= 1e-3 * w)
+                which = "haute";
+            if (which)
+                issues.push_back("%" + f->name + "." + pname + " = " +
+                    S(val*sc) + " est collé à la borne " + which +
+                    " de sa fenêtre [" + S(d.lo*sc) + ":" + S(d.hi*sc) +
+                    "] : la contrainte impose le résultat, l'incertitude de "
+                    "ce paramètre n'est pas fiable.");
+        }
+    }
+
+    if (issues.empty())
+        return;
+
+    wxString msg = wxT("Le fit a convergé, mais à vérifier :\n\n");
+    v_foreach (std::string, s, issues)
+        msg += wxT("• ") + s2wx(*s) + wxT("\n\n");
+    msg += wxT("(Détails et interprétation : menu Help → Protocole de fit.)");
+    wxMessageBox(msg, wxT("Vérifications après le fit"),
+                 wxOK | wxICON_WARNING, this);
+}
+
 void FFrame::OnModelExport(wxCommandEvent&)
 {
     ModelInfoDlg dlg(this, -1);
@@ -1503,6 +1603,7 @@ void FFrame::OnFRun (wxCommandEvent&)
         apply_nonneg_if_on();
         string cmd = dlg.get_cmd();
         exec(cmd);
+        check_fit_warnings();
     }
 }
 
@@ -2705,6 +2806,7 @@ void FToolBar::OnClickTool (wxCommandEvent& event)
                 ds.resize(ds.size() - 2); // we don't need ": " at the end
                 exec("fit " + ds);
             }
+            frame->check_fit_warnings();
             break;
         case ID_T_UNDO:
             exec("fit undo");
