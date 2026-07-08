@@ -178,8 +178,26 @@ void DataExportDlg::OnTextChanged(wxCommandEvent&)
         vector<string> v = split_string(s.substr(colon + 1), ',');
         vm_foreach (string, i, v)
             *i = strip_string(*i);
-        for (size_t i = 0; i < list->GetCount(); ++i)
-            list->Check(i, contains_element(v, wx2s(cv[i])));
+        for (size_t i = 0; i < list->GetCount(); ++i) {
+            // The "all component functions" entry holds several comma-separated
+            // tokens (F[0](x), F[1](x), ...). Tick its checkbox when every one
+            // of those components is present in the text, not only when the
+            // whole joined string matches (which never happens as a token).
+            string entry = wx2s(cv[i]);
+            bool checked;
+            if (!entry.empty() && entry.find(',') != string::npos) {
+                checked = true;
+                vector<string> parts = split_string(entry, ',');
+                vm_foreach (string, p, parts)
+                    if (!contains_element(v, strip_string(*p))) {
+                        checked = false;
+                        break;
+                    }
+            } else {
+                checked = contains_element(v, entry);
+            }
+            list->Check(i, checked);
+        }
     }
 }
 
