@@ -85,6 +85,10 @@ public:
     // ensure peak heights are constrained to be >= 0 (called before fitting)
     void apply_nonneg_if_on();
     bool nonneg_peaks() const { return nonneg_peaks_; }
+    void OnWarnFitIssues (wxCommandEvent& event);
+    // after a fit, warn (pop-up) about parameters stuck on a bound or peaks
+    // pushed to ~0 height, unless the option is turned off
+    void check_fit_warnings();
     void OnParametersExport (wxCommandEvent& event);
     void OnModelExport   (wxCommandEvent& event);
 
@@ -237,6 +241,7 @@ private:
     wxString last_session_path_;
     bool antialias_;
     bool nonneg_peaks_;
+    bool warn_fit_issues_;
 
     void place_plot_and_io_windows(wxWindow *parent);
     void create_io_panel(wxWindow *parent);
