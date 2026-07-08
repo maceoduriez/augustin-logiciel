@@ -66,11 +66,16 @@ jobs:
     - name: package portable zip
       run: |
         mkdir -p pkg
-        # main executable (libtool puts the real binary in .libs)
-        if [ -f wxgui/.libs/fityk.exe ]; then cp wxgui/.libs/fityk.exe pkg/; else cp wxgui/fityk.exe pkg/; fi
+        echo "=== exe/dll produits par le build ==="
+        find wxgui fityk -name '*.exe' -o -name '*.dll' | head -20
+        # main executable (location depends on libtool wrapping)
+        EXE=$(find wxgui -name 'fityk.exe' | head -1)
+        if [ -z "$EXE" ]; then echo "fityk.exe introuvable"; exit 1; fi
+        echo "exe: $EXE"
+        cp "$EXE" pkg/
         # libfityk + xylib DLLs
-        cp fityk/.libs/*.dll pkg/ 2>/dev/null || true
-        cp /mingw64/bin/libxy-*.dll pkg/ 2>/dev/null || true
+        find fityk -name '*.dll' -exec cp {} pkg/ \;
+        cp /mingw64/bin/libxy*.dll pkg/ 2>/dev/null || true
         # all mingw64 DLLs the exe (and copied DLLs) depend on, recursively
         for i in 1 2 3; do
           for f in pkg/*.exe pkg/*.dll; do
