@@ -46,6 +46,7 @@ jobs:
       run: |
         autoreconf -i
         ./configure --disable-python --disable-CLI \
+            --disable-dependency-tracking \
             --with-wx-config=/mingw64/bin/wx-config
         make -j4
 
