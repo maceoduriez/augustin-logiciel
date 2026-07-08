@@ -1305,8 +1305,29 @@ void FFrame::OnNonNegPeaks(wxCommandEvent& event)
 // If the "non-negative peaks" option is on, make sure every peak height is
 // constrained to [0:+inf). Called right before a fit is run. mpfit (the
 // default fitting method) honours these box constraints.
+// Also snaps any parameter whose value lies outside its range constraint
+// back into the range: otherwise mpfit aborts instantly with
+// "initial values inconsistent with constraints" and the fit looks dead.
 void FFrame::apply_nonneg_if_on()
 {
+    for (size_t i = 0; i != ftk->mgr.variables().size(); ++i) {
+        const fityk::Variable* var = ftk->mgr.get_variable(i);
+        if (!var->is_simple())
+            continue;
+        realt v = var->value();
+        realt snapped = v;
+        if (!var->domain.lo_inf() && v < var->domain.lo)
+            snapped = var->domain.lo;
+        else if (!var->domain.hi_inf() && v > var->domain.hi)
+            snapped = var->domain.hi;
+        if (snapped != v) {
+            ftk->ui()->warn("$" + var->name + " = " + S(v) +
+                            " was outside of its range constraint " +
+                            var->domain.str() + " -> moved to " + S(snapped) +
+                            " before fitting.");
+            exec("$" + var->name + " = ~" + eS(snapped));
+        }
+    }
     if (!nonneg_peaks_)
         return;
     v_foreach (fityk::Function*, i, ftk->mgr.functions()) {
