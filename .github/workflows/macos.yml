@@ -1,0 +1,62 @@
+name: macOS build
+
+# Build the Fityk GUI on macOS (Apple Silicon) using the exact local recipe
+# from dist/BUILD_MAC.md, then package the self-contained .app and upload it as
+# an artifact. This replaces the old inherited Linux CI (its ubuntu-18.04 runner
+# was retired by GitHub and the wx 3.0 package was dropped on 22.04). Fityk-plus
+# ships macOS + Windows only.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: "macOS (Apple Silicon)"
+    runs-on: macos-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: dependencies (Homebrew)
+      run: |
+        brew install automake autoconf libtool pkg-config swig lua wxwidgets boost dylibbundler
+
+    - name: build xylib (no Homebrew formula, compiled from source)
+      run: |
+        git clone --depth 1 https://github.com/wojdyr/xylib.git /tmp/xylib
+        cd /tmp/xylib
+        autoreconf -i
+        ./configure --without-gui --disable-static --prefix="$HOME/.local" \
+            CPPFLAGS="-I/opt/homebrew/include" LDFLAGS="-L/opt/homebrew/lib"
+        make -j3
+        make install
+
+    - name: build fityk (GUI, autotools)
+      run: |
+        autoreconf -i
+        # -std=gnu++14: the code uses dynamic exception specs (throw(...)),
+        # removed in C++17 which recent compilers default to. Same reason as the
+        # Windows build.
+        ./configure --disable-python --without-readline \
+            --with-wx-config=/opt/homebrew/bin/wx-config \
+            CPPFLAGS="-I$HOME/.local/include -I/opt/homebrew/include -I/opt/homebrew/include/lua -I/opt/homebrew/include/lua5.4" \
+            LDFLAGS="-L$HOME/.local/lib -L/opt/homebrew/lib" \
+            CXXFLAGS="-g -O2 -std=gnu++14"
+        make -j3
+
+    - name: smoke test (CLI runs)
+      run: |
+        test -x wxgui/.libs/fityk || { echo "GUI binary missing"; exit 1; }
+        export DYLD_LIBRARY_PATH="$HOME/.local/lib:/opt/homebrew/lib"
+        ./cli/cfityk --version
+
+    - name: package self-contained .app
+      run: |
+        ./dist/make_app.sh
+        cd dist && ditto -c -k --keepParent "Fityk +.app" "Fityk-plus-mac.zip"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: fityk-plus-macos
+        path: dist/Fityk-plus-mac.zip

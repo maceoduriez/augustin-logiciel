@@ -39,5 +39,29 @@ fityk-?.?.?.tar.bz2
 dist/*.app/
 dist/*.zip
 
+# autotools / libtool build artifacts (in-tree build)
+.deps/
+.libs/
+.dirstamp
+*.lo
+*.la
+*.a
+/config.h
+/config.log
+/config.status
+/libtool
+/stamp-h1
+/fityk.iss
+
+# built binaries
+cli/cfityk
+wxgui/fityk
+
+# local test data
+/data/
+
+# macOS
+.DS_Store
+
 # local Claude instructions (not versioned)
 CLAUDE.local.md
