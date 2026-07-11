@@ -4,6 +4,9 @@
 #ifndef FITYK_WX_MPLOT_H_
 #define FITYK_WX_MPLOT_H_
 
+#include <map>
+#include <string>
+
 #include "plot.h"
 #include "fityk/tplate.h" // Tplate::Kind
 
@@ -78,16 +81,22 @@ public:
     MouseModeEnum get_mouse_mode() const { return mode_; }
     const wxColour& get_data_color(int n) const
         { return data_colors_[n < (int) data_colors_.size() ? n : 0]; }
-    const wxColour& get_func_color(int n) const
-        { return peakCol[n % max_peak_cols]; }
+    // The color is attached to the function (by name), not to its position
+    // in the model, so deleting a function does not shift other colors.
+    // The first call for a given name assigns the next color from the
+    // peakCol palette.
+    wxColour get_func_color(const std::string& name) const;
     void set_data_color(int n, const wxColour& col);
     void set_data_point_size(int /*n*/, int r) { point_radius = r; }
     void set_data_with_line(int /*n*/, bool b) { line_between_points = b; }
     void set_data_with_sigma(int /*n*/, bool b) { draw_sigma = b; }
     int get_data_point_size(int /*n*/) const { return point_radius; }
     bool get_data_with_line(int /*n*/) const { return line_between_points; }
-    void set_func_color(int n, const wxColour& col)
-        { peakCol[n % max_peak_cols] = col; }
+    void set_func_color(const std::string& name, const wxColour& col)
+        { func_colors_[name] = col; }
+    const std::map<std::string, wxColour>& func_colors() const
+        { return func_colors_; }
+    void reset_func_colors() { func_colors_.clear(); next_func_color_ = 0; }
     bool get_x_reversed() const { return x_reversed_; }
     void show_popup_menu(wxMouseEvent &event);
     void set_hint_receiver(HintReceiver *hr)
@@ -121,6 +130,10 @@ private:
     int model_line_width_;
     //wxColour groupCol[max_group_cols];
     wxColour peakCol[max_peak_cols];
+    // per-function colors (function name -> color); filled lazily from
+    // the peakCol palette, mutable because assignment happens on first use
+    mutable std::map<std::string, wxColour> func_colors_;
+    mutable int next_func_color_;
     std::vector<wxColour> data_colors_;
     bool crosshair_cursor_;
 

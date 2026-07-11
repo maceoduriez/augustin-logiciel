@@ -456,10 +456,10 @@ void SideBar::OnFuncButtonCol (wxCommandEvent&)
                                                          active_function_);
     if (in_ff == ffi.end())
         return;
-    int color_id = in_ff - ffi.begin();
-    wxColour col = frame->get_main_plot()->get_func_color(color_id);
+    const string& name = ftk->mgr.get_function(active_function_)->name;
+    wxColour col = frame->get_main_plot()->get_func_color(name);
     if (change_color_dlg(col)) {
-        frame->get_main_plot()->set_func_color(color_id, col);
+        frame->get_main_plot()->set_func_color(name, col);
         update_lists();
         frame->plot_pane()->refresh_plots(false, kMainPlot);
     }
@@ -574,14 +574,15 @@ void SideBar::update_func_list(bool nondata_changed)
     if (nondata_changed || func_col_id != new_func_col_id) {
         func_col_id = new_func_col_id;
         func_images = new wxImageList(16, 16);
-        v_foreach (int, i, func_col_id) {
-            if (*i == -2)
+        for (int k = 0; k != (int) func_col_id.size(); ++k) {
+            if (func_col_id[k] == -2)
                 func_images->Add(wxBitmap(unused_xpm));
-            else if (*i == -1)
+            else if (func_col_id[k] == -1)
                 func_images->Add(wxBitmap(zshift_xpm));
             else
-                func_images->Add(make_color_bitmap16(mplot->get_func_color(*i),
-                                                     bg_col));
+                func_images->Add(make_color_bitmap16(
+                        mplot->get_func_color(ftk->mgr.get_function(k)->name),
+                        bg_col));
         }
     }
     old_func_size = func_size;

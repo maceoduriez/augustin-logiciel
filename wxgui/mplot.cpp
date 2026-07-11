@@ -261,6 +261,7 @@ MainPlot::MainPlot (wxWindow *parent)
       bgm_(new BgManager(xs)),
       dragged_func_(new DraggedFunc(ftk->mgr)),
       basic_mode_(mmd_zoom), mode_(mmd_zoom),
+      next_func_color_(0),
       crosshair_cursor_(false),
       pressed_mouse_button_(0),
       over_peak_(-1),
@@ -472,7 +473,7 @@ void MainPlot::draw_peaks(wxDC& dc, const Model* model, bool set_pen)
             to = min(to, xs.px(right));
         }
         if (set_pen)
-            dc.SetPen(wxPen(peakCol[k % max_peak_cols], pen_width));
+            dc.SetPen(wxPen(get_func_color(f->name), pen_width));
         f->calculate_value(xx, yy);
         for (int i = from; i <= to; ++i)
             YY[i] = ys.px_d(yy[i]);
@@ -511,7 +512,8 @@ void MainPlot::draw_plabels (wxDC& dc, const Model* model, bool set_pen)
     for (int k = 0; k < (int) idx.size(); k++) {
         const wxPoint &peaktop = special_points[k];
         if (set_pen)
-            dc.SetTextForeground(peakCol[k % max_peak_cols]);
+            dc.SetTextForeground(
+                    get_func_color(ftk->mgr.get_function(idx[k])->name));
 
         wxString label = s2wx(plabels_[k]);
         wxCoord w, h;
@@ -687,6 +689,8 @@ void MainPlot::read_settings(wxConfigBase *cf)
     peakCol[0] = cfg_read_color(cf, wxT("0"), wxColour(255, 0, 0));
     for (int i = 0; i < max_peak_cols; i++)
         peakCol[i] = cfg_read_color(cf, s2wx(S(i)), peakCol[0]);
+    // palette (re)loaded -> re-assign function colors from it
+    reset_func_colors();
     //for (int i = 0; i < max_group_cols; i++)
     //    groupCol[i] = cfg_read_color(cf, wxString::Format(wxT("group/%i"), i),
     //                                 wxColour(173, 216, 230));
@@ -915,6 +919,22 @@ void MainPlot::switch_to_mode(MouseModeEnum m)
         refresh();
     else
         overlay.draw_overlay();
+}
+
+wxColour MainPlot::get_func_color(const string& name) const
+{
+    map<string, wxColour>::const_iterator it = func_colors_.find(name);
+    if (it != func_colors_.end())
+        return it->second;
+    wxColour col = peakCol[next_func_color_ % max_peak_cols];
+    ++next_func_color_;
+    func_colors_[name] = col;
+    static const bool debug_gui = (getenv("FITYK_GUI_DEBUG") != NULL);
+    if (debug_gui)
+        fprintf(stderr, "[func_color] %%%s -> %s (slot %d)\n", name.c_str(),
+                (const char*) col.GetAsString(wxC2S_HTML_SYNTAX).mb_str(),
+                next_func_color_ - 1);
+    return col;
 }
 
 void MainPlot::set_data_color(int n, const wxColour& col)
@@ -1774,6 +1794,9 @@ void MainPlotConfDlg::OnColor(wxColourPickerEvent& event)
     else if (id == func_cp_->GetId()) {
         for (int i = 0; i < MainPlot::max_peak_cols; ++i)
             mp_->peakCol[i] = event.GetColour();
+        // recolor also functions that already got a color assigned
+        mp_->reset_func_colors();
+        frame->update_data_pane();
     }
     mp_->refresh();
 }
