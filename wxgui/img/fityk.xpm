@@ -2,7 +2,7 @@
 static const char * fityk_xpm[] = {
 "32 32 2 1",
 " 	c None",
-".	c #F28100",
+".	c #1668DC",
 "                           .    ",
 "                          ...   ",
 "                     .   .....  ",
