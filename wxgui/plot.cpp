@@ -58,6 +58,13 @@ void Overlay::bg_color_updated(const wxColor& bg)
 
 void Overlay::draw_overlay()
 {
+#ifdef __WXOSX__
+    // On macOS (Cocoa) drawing on a wxClientDC outside of a paint event
+    // is a no-op, so we just invalidate the window; paint_on() will be
+    // called from the paint handler (BufferedPanel::update_buffer_and_blit).
+    panel_->Refresh(false);
+    panel_->Update();
+#else
     if (mode_ == kFunction)
         // function is drawn by calling draw_lines()
         return;
@@ -67,9 +74,29 @@ void Overlay::draw_overlay()
 
     wxClientDC dc(panel_) ;
     panel_->blit(dc);
+    paint_on(dc);
+#endif
+}
 
+void Overlay::paint_on(wxDC& dc)
+{
+    static const bool debug_gui = (getenv("FITYK_GUI_DEBUG") != NULL);
+    if (debug_gui && (mode_ != kNone || !points_.empty()))
+        fprintf(stderr, "[overlay %p] paint mode=%d points=%d "
+                        "(%d,%d)-(%d,%d)\n",
+                (void*) panel_, (int) mode_, (int) points_.size(),
+                x1_, y1_, x2_, y2_);
     dc.SetPen(wxPen(color_, 1, wxPENSTYLE_SHORT_DASH));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
+
+    // polyline stored by draw_lines() (function draft, vertical lines
+    // mirrored from another plot); when set, it is what was drawn last
+    if (mode_ == kFunction || !points_.empty()) {
+        if (points_.size() >= 2)
+            dc.DrawLines((int) points_.size(), &points_[0]);
+        return;
+    }
+
     switch (mode_) {
         case kRect:
             if (x1_ != x2_ || y1_ != y2_) {
@@ -130,9 +157,7 @@ void Overlay::draw_overlay()
             dc.DrawLine(0, y1_, dc.GetSize().GetWidth(), y1_);
             dc.DrawLine(0, y2_, dc.GetSize().GetWidth(), y2_);
             break;
-        case kFunction:
-            assert(0);
-            break;
+        case kFunction: // handled above (points_)
         case kNone:
             break;
     }
@@ -140,6 +165,14 @@ void Overlay::draw_overlay()
 
 void Overlay::draw_lines(int n, wxPoint points[])
 {
+    if (n > 0)
+        points_.assign(points, points + n);
+    else
+        points_.clear();
+#ifdef __WXOSX__
+    panel_->Refresh(false);
+    panel_->Update();
+#else
     if (!panel_->get_bitmap().IsOk())
         return;
     wxClientDC dc(panel_) ;
@@ -148,6 +181,7 @@ void Overlay::draw_lines(int n, wxPoint points[])
         return;
     dc.SetPen(wxPen(color_, 1, wxPENSTYLE_SHORT_DASH));
     dc.DrawLines(n, points);
+#endif
 }
 
 

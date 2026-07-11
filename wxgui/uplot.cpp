@@ -96,6 +96,7 @@ void BufferedPanel::update_buffer_and_blit()
             dirty_ = false;
     }
     blit(pdc);
+    paint_overlay(pdc);
 }
 
 void BufferedPanel::blit(wxDC& dc)

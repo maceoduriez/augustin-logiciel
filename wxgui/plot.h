@@ -104,13 +104,18 @@ public:
         kHRange
     };
     Overlay(BufferedPanel *panel) : panel_(panel), mode_(kNone),
-                                    color_(192,192,192) {}
-    void start_mode(Mode m, int x1, int y1) { mode_=m; x1_=x2_=x1; y1_=y2_=y1; }
-    void switch_mode(Mode m) { mode_=m; }
+                                    color_(192,192,192),
+                                    x1_(-1), x2_(-1), y1_(-1), y2_(-1) {}
+    void start_mode(Mode m, int x1, int y1)
+        { mode_=m; x1_=x2_=x1; y1_=y2_=y1; points_.clear(); }
+    void switch_mode(Mode m) { mode_=m; points_.clear(); }
     void change_pos(int x2,int y2)
         { x2_=x2; y2_=y2; if (mode_!=kNone) draw_overlay(); }
     void draw_overlay();
     void draw_lines(int n, wxPoint points[]);
+    /// draw the current overlay content on the given DC; called from the
+    /// paint handler after the buffered bitmap was blitted
+    void paint_on(wxDC& dc);
     Mode mode() const { return mode_; }
     void bg_color_updated(const wxColour& bg);
 
@@ -119,6 +124,7 @@ private:
     Mode mode_;
     wxColour color_;
     int x1_, x2_, y1_, y2_;
+    std::vector<wxPoint> points_; // polyline set by draw_lines()
 };
 
 
@@ -146,6 +152,7 @@ public:
     void set_magnification(int m) { pen_width = m > 0 ? m : 1; }
     void draw_vertical_lines_on_overlay(int X1, int X2);
     virtual void set_bg_color(wxColour const& c);
+    virtual void paint_overlay(wxDC& dc) { overlay.paint_on(dc); }
 
 protected:
     Scale xs, ys;

@@ -39,6 +39,11 @@ public:
     wxBitmap draw_on_bitmap(int w, int h, int depth=-1);
     /// plotting function called to refresh buffer
     virtual void draw(wxDC &dc, bool monochrome=false) = 0;
+    /// called from update_buffer_and_blit() after the buffer was blitted;
+    /// used to draw a temporary overlay (rubber-band, etc.) on the window.
+    /// On macOS drawing outside of the paint event is not supported,
+    /// so this hook is the only reliable way to draw overlays.
+    virtual void paint_overlay(wxDC& /*dc*/) {}
     /// get bitmap buffer
     wxBitmap const& get_bitmap() const { return buffer_; }
 
