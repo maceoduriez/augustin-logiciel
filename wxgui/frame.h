@@ -129,6 +129,8 @@ public:
 #endif
     void OnSessionLoad(wxCommandEvent&);
     void OnSessionSave(wxCommandEvent&);
+    void save_gui_colors_in_session(const wxString& path);
+    void load_gui_colors_from_session(const wxString& path);
     void OnSettings      (wxCommandEvent&);
     void OnEditInit      (wxCommandEvent&);
     void OnPageSetup     (wxCommandEvent&);

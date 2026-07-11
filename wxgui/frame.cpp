@@ -20,6 +20,8 @@
 #include <wx/filename.h>
 
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 #include <string.h>
 
 #include <xylib/xylib.h>
@@ -1834,6 +1836,7 @@ void FFrame::OnSessionLoad(wxCommandEvent&)
         get_main_plot()->bgm()->clear_background();
         last_session_path_ = fdlg.GetPath();
         exec("reset; exec '" + wx2s(last_session_path_) + "'");
+        load_gui_colors_from_session(last_session_path_);
         //GetMenuBar()->Enable(ID_SESSION_RECENT, true);
     }
     script_dir_ = fdlg.GetDirectory();
@@ -1850,8 +1853,75 @@ void FFrame::OnSessionSave(wxCommandEvent&)
     if (fdlg.ShowModal() == wxID_OK) {
         last_session_path_ = fdlg.GetPath();
         exec("info state > '" + wx2s(last_session_path_) + "'");
+        save_gui_colors_in_session(last_session_path_);
     }
     script_dir_ = fdlg.GetDirectory();
+}
+
+// The session file (a fityk script) does not carry GUI settings, so the
+// plot colors are appended as comment lines that the script engine ignores:
+//   # Fityk+ func_color %name #RRGGBB
+//   # Fityk+ data_color @0 #RRGGBB
+void FFrame::save_gui_colors_in_session(const wxString& path)
+{
+    std::ofstream f(path.mb_str(), std::ios::app);
+    if (!f)
+        return;
+    const MainPlot *mp = get_main_plot();
+    f << "\n# GUI colors saved by Fityk+ "
+         "(restored by Session > Load Session)\n";
+    const std::map<string, wxColour>& fc = mp->func_colors();
+    v_foreach (fityk::Function*, i, ftk->mgr.functions()) {
+        std::map<string, wxColour>::const_iterator it = fc.find((*i)->name);
+        if (it != fc.end())
+            f << "# Fityk+ func_color %" << (*i)->name << " "
+              << wx2s(it->second.GetAsString(wxC2S_HTML_SYNTAX)) << "\n";
+    }
+    for (int i = 0; i != ftk->dk.count(); ++i)
+        f << "# Fityk+ data_color @" << i << " "
+          << wx2s(mp->get_data_color(i).GetAsString(wxC2S_HTML_SYNTAX)) << "\n";
+    if (getenv("FITYK_GUI_DEBUG") != NULL)
+        fprintf(stderr, "[session] colors appended to %s\n",
+                (const char*) path.mb_str());
+}
+
+void FFrame::load_gui_colors_from_session(const wxString& path)
+{
+    std::ifstream f(path.mb_str());
+    if (!f)
+        return;
+    MainPlot *mp = get_main_plot();
+    bool found = false;
+    string line;
+    while (std::getline(f, line)) {
+        std::istringstream iss(line);
+        string hash, tag, kind, target, color;
+        if (!(iss >> hash >> tag >> kind >> target >> color))
+            continue;
+        if (hash != "#" || tag != "Fityk+")
+            continue;
+        wxColour col(s2wx(color));
+        if (!col.IsOk() || target.size() < 2)
+            continue;
+        bool matched = false;
+        if (kind == "func_color" && target[0] == '%') {
+            mp->set_func_color(target.substr(1), col);
+            matched = true;
+        } else if (kind == "data_color" && target[0] == '@') {
+            mp->set_data_color(atoi(target.c_str() + 1), col);
+            matched = true;
+        }
+        if (matched) {
+            found = true;
+            if (getenv("FITYK_GUI_DEBUG") != NULL)
+                fprintf(stderr, "[session] restored %s %s %s\n",
+                        kind.c_str(), target.c_str(), color.c_str());
+        }
+    }
+    if (found) {
+        sidebar_->update_lists();
+        plot_pane()->refresh_plots(false, kAllPlots);
+    }
 }
 
 void FFrame::OnSettings (wxCommandEvent&)
