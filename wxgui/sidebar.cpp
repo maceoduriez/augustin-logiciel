@@ -147,9 +147,26 @@ SideBar::SideBar(wxWindow *parent, wxWindowID id)
     nb = new wxNotebook(this, -1);
     //upper_sizer->Add(nb, 1, wxEXPAND);
     //upper->SetSizerAndFit(upper_sizer);
-    param_panel_ = new ParameterPanel(this, -1, this);
+    wxPanel *bottom_panel = new wxPanel(this, -1);
+    wxBoxSizer *bottom_sizer = new wxBoxSizer(wxVERTICAL);
+    param_panel_ = new ParameterPanel(bottom_panel, -1, this);
     param_panel_->set_key_sink(frame, wxKeyEventHandler(FFrame::focus_input));
-    SplitHorizProp(nb, param_panel_);
+    bottom_sizer->Add(param_panel_, 1, wxEXPAND);
+    fit_quality_st_ = new wxStaticText(bottom_panel, -1,
+                    wxString::FromUTF8("\xe2\x88\x9aN = -\n"
+                                       "|\xe2\x88\xabres| = -\n"
+                                       "|\xe2\x88\xabres|/\xe2\x88\x9aN = -"));
+    wxFont fq_font = fit_quality_st_->GetFont();
+    fq_font.SetPointSize(fq_font.GetPointSize() - 1);
+    fit_quality_st_->SetFont(fq_font);
+    fit_quality_st_->SetToolTip(wxString::FromUTF8(
+        "fit quality over the active range:\n"
+        "\xe2\x88\x9aN = sqrt of the integral of the model,\n"
+        "|\xe2\x88\xabres| = abs. integral of the residuals,\n"
+        "and their ratio"));
+    bottom_sizer->Add(fit_quality_st_, 0, wxEXPAND|wxLEFT|wxTOP|wxBOTTOM, 4);
+    bottom_panel->SetSizer(bottom_sizer);
+    SplitHorizProp(nb, bottom_panel);
 
     //-----  data page  -----
     data_page = new wxPanel(nb, -1);
@@ -518,7 +535,55 @@ void SideBar::update_lists(bool nondata_changed)
     update_func_inf();
     update_var_inf();
     update_param_panel();
+    update_fit_quality();
     Thaw();
+}
+
+// fit-quality indicator: sqrt of the integral of the model over the active
+// range (sqrt(N)), absolute value of the integral of the residuals
+// (|int(res)|) and the ratio |int(res)|/sqrt(N).
+// Integrals are computed with the trapezoid rule over active points.
+void SideBar::update_fit_quality()
+{
+    int n = get_focused_data();
+    const fityk::Data* data = ftk->dk.data(n);
+    const Model* model = ftk->dk.get_model(n);
+    double area_model = 0., area_res = 0.;
+    double prev_x = 0., prev_m = 0., prev_r = 0.;
+    int active_count = 0;
+    v_foreach (fityk::Point, p, data->points()) {
+        if (!p->is_active)
+            continue;
+        double m = model->value(p->x);
+        double r = p->y - m;
+        if (active_count > 0) {
+            double dx = p->x - prev_x;
+            area_model += dx * (m + prev_m) / 2;
+            area_res += dx * (r + prev_r) / 2;
+        }
+        prev_x = p->x;
+        prev_m = m;
+        prev_r = r;
+        ++active_count;
+    }
+    wxString sqrt_n = wxT("-"), int_res = wxT("-"), ratio = wxT("-");
+    if (active_count >= 2) {
+        int_res = wxString::Format(wxT("%.4g"), fabs(area_res));
+        if (area_model > 0) {
+            double sn = sqrt(area_model);
+            sqrt_n = wxString::Format(wxT("%.4g"), sn);
+            ratio = wxString::Format(wxT("%.4g"), fabs(area_res) / sn);
+        }
+    }
+    static const bool debug_gui = (getenv("FITYK_GUI_DEBUG") != NULL);
+    if (debug_gui)
+        fprintf(stderr, "[fitq] @%d active=%d area_model=%g area_res=%g\n",
+                n, active_count, area_model, area_res);
+    fit_quality_st_->SetLabel(
+            wxString::FromUTF8("\xe2\x88\x9aN = ") + sqrt_n
+            + wxString::FromUTF8("\n|\xe2\x88\xabres| = ") + int_res
+            + wxString::FromUTF8("\n|\xe2\x88\xabres|/\xe2\x88\x9aN = ")
+            + ratio);
 }
 
 

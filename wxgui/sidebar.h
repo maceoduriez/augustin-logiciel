@@ -80,6 +80,7 @@ public:
     void update_func_inf();
     void update_var_inf();
     void update_param_panel();
+    void update_fit_quality();
     void delete_selected_items();
     std::string get_datasets_for_plot();
     DraggedFuncObserver* dragged_func_callback() { return param_panel_; }
@@ -99,6 +100,7 @@ private:
     wxPanel *data_page, *func_page, *var_page;
     fityk::Function const* pp_func_; ///parameter panel function
     ParameterPanel *param_panel_;
+    wxStaticText *fit_quality_st_; // sqrt(N), |int(res)| and their ratio
     DataListPlusText *d;
     ListPlusText *f, *v;
     wxChoice *data_look;
