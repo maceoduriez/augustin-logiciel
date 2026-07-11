@@ -5,6 +5,9 @@
 #include <wx/wx.h>
 #include <wx/config.h>
 #include <wx/colordlg.h>
+#ifdef __WXOSX__
+#include <wx/generic/colrdlgg.h>
+#endif
 #include <wx/statline.h>
 #include <wx/msgdlg.h>
 #include <wx/stdpaths.h>
@@ -78,15 +81,76 @@ void cfg_write_font (wxConfigBase *config, const wxString& key,
                                     : wxString());
 }
 
+// custom colors shown in the color dialog:
+// - slots 0-4 always hold these 5 default colors,
+// - slots 5-15 are free and remembered across dialogs and sessions
+//   (stored in the global wxConfig).
+static const int kFixedCustomColors = 5;
+
+static wxColour default_custom_color(int i)
+{
+    static const unsigned char rgb[kFixedCustomColors][3] = {
+        {243, 192, 141}, {173, 215, 161}, {179, 198, 229},
+        {228,  71,  83}, {136, 126, 242}
+    };
+    return wxColour(rgb[i][0], rgb[i][1], rgb[i][2]);
+}
+
+static wxColourData& persistent_colour_data()
+{
+    static wxColourData col_data;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        col_data.SetChooseFull(true);
+        for (int i = 0; i < kFixedCustomColors; ++i)
+            col_data.SetCustomColour(i, default_custom_color(i));
+        wxConfigBase *cfg = wxConfig::Get(false);
+        if (cfg != NULL)
+            for (int i = kFixedCustomColors; i < 16; ++i) {
+                wxString s = cfg->Read(
+                        wxString::Format(wxT("/CustomColors/c%d"), i),
+                        wxEmptyString);
+                if (!s.empty())
+                    col_data.SetCustomColour(i, wxColour(s));
+            }
+    }
+    return col_data;
+}
+
+static void save_custom_colours(wxColourData& col_data)
+{
+    wxConfigBase *cfg = wxConfig::Get(false);
+    if (cfg == NULL)
+        return;
+    for (int i = kFixedCustomColors; i < 16; ++i) {
+        wxColour c = col_data.GetCustomColour(i);
+        if (c.IsOk())
+            cfg->Write(wxString::Format(wxT("/CustomColors/c%d"), i),
+                       c.GetAsString(wxC2S_HTML_SYNTAX));
+    }
+    cfg->Flush();
+}
+
 bool change_color_dlg(wxColour& col)
 {
-    wxColourData col_data;
-    col_data.SetCustomColour(0, col);
+    wxColourData& col_data = persistent_colour_data();
     col_data.SetColour(col);
-    wxColourDialog dialog(0, &col_data);
+#ifdef __WXOSX__
+    // the native macOS color panel ignores wxColourData custom colors,
+    // the generic dialog shows them and has "Add to custom colours"
+    wxGenericColourDialog dialog(NULL, &col_data);
+#else
+    wxColourDialog dialog(NULL, &col_data);
+#endif
     bool ok = (dialog.ShowModal() == wxID_OK);
-    if (ok)
+    if (ok) {
         col = dialog.GetColourData().GetColour();
+        col_data = dialog.GetColourData();
+        for (int i = 0; i < kFixedCustomColors; ++i)
+            col_data.SetCustomColour(i, default_custom_color(i));
+        save_custom_colours(col_data);
+    }
     return ok;
 }
 
