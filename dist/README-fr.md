@@ -26,7 +26,7 @@ autre machine Mac de **même architecture** (ici Apple Silicon / arm64).
 
 ---
 
-## 2. Ce qui a été modifié (6 points)
+## 2. Ce qui a été modifié
 
 ### a) Verrouiller le centre (ou tout paramètre) à ± une valeur choisie
 Dans le panneau des paramètres (barre latérale, onglet *functions*, sélectionner
@@ -75,6 +75,31 @@ C'est le **même algorithme** (Levenberg-Marquardt, issu de MINPACK) mais il
 points *a)* et *b)* soient réellement appliqués pendant le fit. On peut toujours
 changer de méthode dans **Fit → Method**.
 
+### g) Couleurs correctes quand on enchaîne les sessions
+Les couleurs (fonctions et datasets) sont réinitialisées à chaque
+**Session → Load Session** : charger une deuxième session sans fermer le
+logiciel n'hérite plus des couleurs de la première. Les couleurs enregistrées
+dans le fichier de session sont ensuite réappliquées.
+
+### h) Raccourcis pour les sessions
+- **⌘⇧O** : charger une session (*Session → Load Session*)
+- **⌘⇧S** : enregistrer la session (*Session → Save Session*)
+
+(⌘O et ⌘S restent réservés aux données : chargement / export.)
+
+### i) Confirmation à la fermeture
+Si la session contient des changements non enregistrés, fermer la fenêtre (ou
+⌘Q / ⌘W) demande d'abord **Enregistrer / Ne pas enregistrer / Annuler**, comme
+Excel ou PowerPoint.
+
+### j) Décimales des caractéristiques + séparateur de milliers
+Dans l'onglet *functions* de la barre latérale, le bouton **« 0.0 »** ouvre
+**« Décimales affichées »** : pour chaque grandeur (Centre, Hauteur, Aire,
+FWHM, Autres), choisir *auto* ou un nombre de décimales (ex. Centre à 2
+décimales, Aire arrondie à l'unité). S'applique à la liste des fonctions, au
+panneau d'info du pic et aux étiquettes sur le graphe. Les milliers sont
+toujours séparés par une espace (**1 235** au lieu de 1235). Réglage mémorisé.
+
 ---
 
 ## 3. Reconstruire depuis les sources
@@ -98,5 +123,8 @@ make -j4            # recompile ; le binaire est wxgui/fityk (wrapper)
 | `wxgui/frame.cpp` / `frame.h` | option « Non-negative peaks », menus Edit/Window Mac, raccourcis |
 | `wxgui/sidebar.cpp` / `sidebar.h` | affichage/saisie FWHM, menu contextuel « lock ± » |
 | `wxgui/parpan.cpp` / `parpan.h` | échelle d'affichage par ligne (FWHM), clic droit sur les paramètres |
+| `wxgui/mplot.cpp` / `mplot.h` | réinitialisation des couleurs au changement de session, étiquettes de pics formatées |
+| `wxgui/cmn.cpp` / `cmn.h` | formateur décimales + séparateur de milliers |
+| `wxgui/app.cpp` | marquage « session modifiée » après chaque commande |
 
 Aucun autre comportement n'a été modifié.
