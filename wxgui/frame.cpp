@@ -282,6 +282,7 @@ void append_mi(wxMenu* menu, int id, wxBitmap const& bitmap,
 
 
 BEGIN_EVENT_TABLE(FFrame, wxFrame)
+    EVT_CLOSE (FFrame::OnClose)
     EVT_MENU (ID_SESSION_INCLUDE, FFrame::OnInclude)
     EVT_MENU (ID_SESSION_NEW_F, FFrame::OnNewFitykScript)
     EVT_MENU (ID_SESSION_NEW_L, FFrame::OnNewLuaScript)
@@ -408,7 +409,7 @@ FFrame::FFrame(wxWindow *parent, const wxWindowID id, const wxString& title,
                  const long style)
     : wxFrame(parent, id, title, wxDefaultPosition, wxDefaultSize, style),
       main_pane_(NULL), sidebar_(NULL), status_bar_(NULL), toolbar_(NULL),
-      zoom_hist_(ftk->view.str())
+      zoom_hist_(ftk->view.str()), session_dirty_(false)
 {
     const int default_peak_nr = 7; // Gaussian
     wxConfigBase *config = wxConfig::Get();
@@ -499,7 +500,35 @@ FFrame::~FFrame()
 
 void FFrame::OnQuit(wxCommandEvent&)
 {
-    Close(true);
+    Close(false);
+}
+
+// confirmation « à la Excel » quand la session a des changements non sauvés
+void FFrame::OnClose(wxCloseEvent& event)
+{
+    if (event.CanVeto() && session_dirty_) {
+        int r = wxMessageBox(
+                wxT("La session n'a pas été enregistrée.\n")
+                wxT("Voulez-vous l'enregistrer avant de fermer ?"),
+                wxT("Session non enregistrée"),
+                wxYES_NO | wxCANCEL | wxICON_QUESTION, this);
+        if (r == wxCANCEL || (r == wxYES && !save_session_interactive())) {
+            event.Veto();
+            return;
+        }
+    }
+    event.Skip();
+}
+
+// display/query commands do not change what would be saved in the session
+void FFrame::mark_session_dirty(const std::string& cmd)
+{
+    static const char* harmless[] = { "plot", "info", "help", "print",
+                                      "quit", "reset" };
+    for (size_t i = 0; i < sizeof(harmless) / sizeof(harmless[0]); ++i)
+        if (cmd.compare(0, strlen(harmless[i]), harmless[i]) == 0)
+            return;
+    session_dirty_ = true;
 }
 
 void FFrame::update_peak_type_list()
@@ -1734,6 +1763,7 @@ void FFrame::OnReset (wxCommandEvent&)
     get_main_plot()->bgm()->clear_background();
     get_main_plot()->reset_all_colors();
     exec("reset");
+    session_dirty_ = false;
 }
 
 #ifdef __WXMAC__
@@ -1744,7 +1774,7 @@ void FFrame::OnNewWindow (wxCommandEvent&)
 
 void FFrame::OnCloseWindow (wxCommandEvent&)
 {
-    Close(true);
+    Close(false);
 }
 
 void FFrame::OnMinimize (wxCommandEvent&)
@@ -1840,6 +1870,7 @@ void FFrame::OnSessionLoad(wxCommandEvent&)
         last_session_path_ = fdlg.GetPath();
         exec("reset; exec '" + wx2s(last_session_path_) + "'");
         load_gui_colors_from_session(last_session_path_);
+        session_dirty_ = false;
         //GetMenuBar()->Enable(ID_SESSION_RECENT, true);
     }
     script_dir_ = fdlg.GetDirectory();
@@ -1847,18 +1878,27 @@ void FFrame::OnSessionLoad(wxCommandEvent&)
 
 void FFrame::OnSessionSave(wxCommandEvent&)
 {
+    save_session_interactive();
+}
+
+bool FFrame::save_session_interactive()
+{
     wxString dir = script_dir_;
     wxString file;
     split_path(last_session_path_, &dir, &file);
     wxFileDialog fdlg(this, "Save everything as a script",
                       dir, file, "fityk file (*.fit)|*.fit;*.FIT",
                       wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    bool saved = false;
     if (fdlg.ShowModal() == wxID_OK) {
         last_session_path_ = fdlg.GetPath();
         exec("info state > '" + wx2s(last_session_path_) + "'");
         save_gui_colors_in_session(last_session_path_);
+        session_dirty_ = false;
+        saved = true;
     }
     script_dir_ = fdlg.GetDirectory();
+    return saved;
 }
 
 // The session file (a fityk script) does not carry GUI settings, so the

@@ -129,6 +129,9 @@ public:
 #endif
     void OnSessionLoad(wxCommandEvent&);
     void OnSessionSave(wxCommandEvent&);
+    void OnClose(wxCloseEvent& event);
+    bool save_session_interactive();
+    void mark_session_dirty(const std::string& cmd);
     void save_gui_colors_in_session(const wxString& path);
     void load_gui_colors_from_session(const wxString& path);
     void OnSettings      (wxCommandEvent&);
@@ -241,6 +244,7 @@ private:
     wxMenu *data_ft_menu_, *func_type_menu_;
     wxString script_dir_, data_dir_, export_dir_;
     wxString last_session_path_;
+    bool session_dirty_;
     bool antialias_;
     bool nonneg_peaks_;
     bool warn_fit_issues_;

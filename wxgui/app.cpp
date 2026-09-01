@@ -162,6 +162,8 @@ UserInterface::Status gui_exec_command(const string& s)
         return UserInterface::kStatusOk;
     }
     frame->after_cmd_updates();
+    if (r == UserInterface::kStatusOk)
+        frame->mark_session_dirty(s);
     return r;
 }
 //-------------------------------------------------------------------------
