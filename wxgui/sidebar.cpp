@@ -4,6 +4,7 @@
 /// class SideBar
 
 #include <wx/wx.h>
+#include <wx/config.h>
 #include <wx/imaglist.h>
 #include <wx/tglbtn.h>
 #include <wx/filename.h>
@@ -67,6 +68,7 @@ enum {
     ID_FP_COL                  ,
     ID_FP_HWHM                 ,
     ID_FP_SHAPE                ,
+    ID_FP_PREC                 ,
     ID_VP_LIST                 ,
     ID_VP_NEW                  ,
     ID_VP_DEL                  ,
@@ -126,6 +128,7 @@ BEGIN_EVENT_TABLE(SideBar, ProportionalSplitter)
     EVT_BUTTON (ID_FP_COL, SideBar::OnFuncButtonCol)
     EVT_TOGGLEBUTTON (ID_FP_HWHM, SideBar::OnFuncButtonHwhm)
     EVT_TOGGLEBUTTON (ID_FP_SHAPE, SideBar::OnFuncButtonShape)
+    EVT_BUTTON (ID_FP_PREC, SideBar::OnFuncButtonPrec)
     EVT_LIST_ITEM_FOCUSED(ID_FP_LIST, SideBar::OnFuncFocusChanged)
     EVT_LIST_ITEM_SELECTED(ID_FP_LIST, SideBar::OnFuncSelectionChanged)
     EVT_LIST_ITEM_DESELECTED(ID_FP_LIST, SideBar::OnFuncSelectionChanged)
@@ -263,6 +266,11 @@ SideBar::SideBar(wxWindow *parent, wxWindowID id)
     //                  wxT("change type of function"), func_buttons_sizer);
     add_bitmap_button(func_page, ID_FP_COL, colorsel_xpm,
                       wxT("change color"), func_buttons_sizer);
+    wxButton *prec_btn = new wxButton(func_page, ID_FP_PREC, wxT("0.0"),
+                                      wxDefaultPosition, wxDefaultSize,
+                                      wxBU_EXACTFIT);
+    prec_btn->SetToolTip(wxT("décimales affichées"));
+    func_buttons_sizer->Add(prec_btn, 0, wxEXPAND);
     add_bitmap_button(func_page, ID_FP_DEL, close_xpm,
                       wxT("delete"), func_buttons_sizer);
     func_sizer->Add(func_buttons_sizer, 0, wxEXPAND);
@@ -290,6 +298,85 @@ SideBar::SideBar(wxWindow *parent, wxWindowID id)
     var_sizer->Add(var_buttons_sizer, 0, wxEXPAND);
     var_page->SetSizerAndFit(var_sizer);
     nb->AddPage(var_page, wxT("variables"));
+}
+
+namespace {
+
+// réglage du nombre de décimales affichées pour les caractéristiques
+// des fonctions (liste, panneau info, étiquettes de pics)
+class ParamFormatDlg : public wxDialog
+{
+public:
+    ParamFormatDlg(wxWindow* parent, const ParamFormat& pf)
+        : wxDialog(parent, -1, wxT("Décimales affichées"))
+    {
+        static const wxString labels[kRows] =
+            { wxT("Centre"), wxT("Hauteur"), wxT("Aire"),
+              wxT("FWHM"), wxT("Autres") };
+        const int values[kRows] =
+            { pf.center, pf.height, pf.area, pf.fwhm, pf.other };
+        wxBoxSizer *top = new wxBoxSizer(wxVERTICAL);
+        wxFlexGridSizer *grid = new wxFlexGridSizer(3, 5, 10);
+        for (int i = 0; i < kRows; ++i) {
+            grid->Add(new wxStaticText(this, -1, labels[i]),
+                      0, wxALIGN_CENTER_VERTICAL);
+            auto_cb_[i] = new wxCheckBox(this, -1, wxT("auto"));
+            auto_cb_[i]->SetValue(values[i] < 0);
+            grid->Add(auto_cb_[i], 0, wxALIGN_CENTER_VERTICAL);
+            dec_sc_[i] = new wxSpinCtrl(this, -1,
+                    wxString::Format(wxT("%d"), values[i] < 0 ? 2 : values[i]),
+                    wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 0, 9);
+            dec_sc_[i]->Enable(values[i] >= 0);
+            grid->Add(dec_sc_[i], 0, wxALIGN_CENTER_VERTICAL);
+            wxSpinCtrl *sc = dec_sc_[i];
+            auto_cb_[i]->Bind(wxEVT_CHECKBOX,
+                    [sc](wxCommandEvent& e) { sc->Enable(!e.IsChecked()); });
+        }
+        top->Add(grid, 0, wxALL, 10);
+        top->Add(new wxStaticText(this, -1,
+                     wxT("Les milliers sont toujours séparés\n")
+                     wxT("par une espace (ex. 1 235).")),
+                 0, wxLEFT|wxRIGHT|wxBOTTOM, 10);
+        top->Add(CreateButtonSizer(wxOK|wxCANCEL), 0, wxALL|wxEXPAND, 10);
+        SetSizerAndFit(top);
+    }
+
+    void save_to(ParamFormat& pf) const
+    {
+        pf.center = decimals(0);
+        pf.height = decimals(1);
+        pf.area = decimals(2);
+        pf.fwhm = decimals(3);
+        pf.other = decimals(4);
+    }
+
+private:
+    static const int kRows = 5;
+    wxCheckBox *auto_cb_[kRows];
+    wxSpinCtrl *dec_sc_[kRows];
+
+    int decimals(int i) const
+        { return auto_cb_[i]->GetValue() ? -1 : dec_sc_[i]->GetValue(); }
+};
+
+} // anonymous namespace
+
+void SideBar::OnFuncButtonPrec (wxCommandEvent&)
+{
+    ParamFormatDlg dlg(this, param_format());
+    if (dlg.ShowModal() != wxID_OK)
+        return;
+    ParamFormat& pf = param_format();
+    dlg.save_to(pf);
+    wxConfigBase *cf = wxConfig::Get();
+    cf->Write(wxT("/SideBar/paramDecCenter"), pf.center);
+    cf->Write(wxT("/SideBar/paramDecHeight"), pf.height);
+    cf->Write(wxT("/SideBar/paramDecArea"), pf.area);
+    cf->Write(wxT("/SideBar/paramDecFwhm"), pf.fwhm);
+    cf->Write(wxT("/SideBar/paramDecOther"), pf.other);
+    update_lists(true);
+    update_func_inf();
+    frame->plot_pane()->refresh_plots(false, kAllPlots);
 }
 
 void SideBar::OnDataButtonNew (wxCommandEvent&)
@@ -504,6 +591,12 @@ void SideBar::read_settings(wxConfigBase *cf)
     f->split(cfg_read_double(cf, wxT("funcProportion"), 0.75));
     v->split(cfg_read_double(cf, wxT("varProportion"), 0.75));
     data_look->Select(cf->Read(wxT("dataLook"), 1L));
+    ParamFormat& pf = param_format();
+    pf.center = cf->Read(wxT("paramDecCenter"), -1L);
+    pf.height = cf->Read(wxT("paramDecHeight"), -1L);
+    pf.area = cf->Read(wxT("paramDecArea"), -1L);
+    pf.fwhm = cf->Read(wxT("paramDecFwhm"), -1L);
+    pf.other = cf->Read(wxT("paramDecOther"), -1L);
 }
 
 void SideBar::save_settings(wxConfigBase *cf) const
@@ -513,6 +606,12 @@ void SideBar::save_settings(wxConfigBase *cf) const
     cf->Write(wxT("funcProportion"), f->GetProportion());
     cf->Write(wxT("varProportion"), v->GetProportion());
     cf->Write(wxT("dataLook"), data_look->GetSelection());
+    const ParamFormat& pf = param_format();
+    cf->Write(wxT("paramDecCenter"), pf.center);
+    cf->Write(wxT("paramDecHeight"), pf.height);
+    cf->Write(wxT("paramDecArea"), pf.area);
+    cf->Write(wxT("paramDecFwhm"), pf.fwhm);
+    cf->Write(wxT("paramDecOther"), pf.other);
 }
 
 void SideBar::update_lists(bool nondata_changed)
@@ -621,10 +720,15 @@ void SideBar::update_func_list(bool nondata_changed)
         func_data.push_back(fun->name);
         func_data.push_back(fun->tp()->name);
         realt a;
-        func_data.push_back(fun->get_center(&a) ? S(a) : S("-"));
-        func_data.push_back(fun->get_area(&a)   ? S(a) : S("-"));
-        func_data.push_back(fun->get_height(&a) ? S(a) : S("-"));
-        func_data.push_back(fun->get_fwhm(&a)   ? S(a) : S("-"));
+        const ParamFormat& pf = param_format();
+        func_data.push_back(fun->get_center(&a) ? format_param(a, pf.center)
+                                                : S("-"));
+        func_data.push_back(fun->get_area(&a)   ? format_param(a, pf.area)
+                                                : S("-"));
+        func_data.push_back(fun->get_height(&a) ? format_param(a, pf.height)
+                                                : S("-"));
+        func_data.push_back(fun->get_fwhm(&a)   ? format_param(a, pf.fwhm)
+                                                : S("-"));
         vector<int> const& ffi = model->get_ff().idx;
         vector<int> const& zzi = model->get_zz().idx;
         vector<int>::const_iterator in_ff = find(ffi.begin(), ffi.end(), i);
@@ -925,20 +1029,22 @@ void SideBar::update_func_inf()
         return;
     Function const* func = ftk->mgr.get_function(active_function_);
     realt a;
+    const ParamFormat& pf = param_format();
     if (func->get_center(&a))
         inf->AppendText(wxT("Center: ")
-                   + s2wx(format1<realt, 30>("%.10" REALT_LENGTH_MOD "g", a)));
+                        + s2wx(format_param(a, pf.center, "%.10g")));
     if (func->get_area(&a))
-        inf->AppendText(wxT("\nArea: ") + s2wx(S(a)));
+        inf->AppendText(wxT("\nArea: ") + s2wx(format_param(a, pf.area)));
     if (func->get_height(&a))
-        inf->AppendText(wxT("\nHeight: ") + s2wx(S(a)));
+        inf->AppendText(wxT("\nHeight: ") + s2wx(format_param(a, pf.height)));
     if (func->get_fwhm(&a))
-        inf->AppendText(wxT("\nFWHM: ") + s2wx(S(a)));
+        inf->AppendText(wxT("\nFWHM: ") + s2wx(format_param(a, pf.fwhm)));
     if (func->get_ibreadth(&a))
-        inf->AppendText(wxT("\nI.Breadth: ") + s2wx(S(a)));
+        inf->AppendText(wxT("\nI.Breadth: ")
+                        + s2wx(format_param(a, pf.other)));
     v_foreach (string, i, func->get_other_prop_names()) {
         func->get_other_prop(*i, &a);
-        inf->AppendText(s2wx("\n" + *i + ": " + S(a)));
+        inf->AppendText(s2wx("\n" + *i + ": " + format_param(a, pf.other)));
     }
 
     vector<string> in;

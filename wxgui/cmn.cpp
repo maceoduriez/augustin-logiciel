@@ -21,6 +21,35 @@ namespace {
 int iround(double d) { return static_cast<int>(floor(d+0.5)); }
 }
 
+ParamFormat& param_format()
+{
+    static ParamFormat pf;
+    return pf;
+}
+
+std::string format_param(double value, int decimals, const char* auto_fmt)
+{
+    char buf[64];
+    if (decimals < 0)
+        snprintf(buf, sizeof(buf), auto_fmt, value);
+    else
+        snprintf(buf, sizeof(buf), "%.*f", decimals, value);
+    string s(buf);
+    if (s.find_first_of("eE") != string::npos)
+        return s;
+    // LC_NUMERIC is forced to "C" (see fityk/logic.cpp), so the
+    // thousands separator has to be inserted by hand
+    string::size_type end = s.find('.');
+    if (end == string::npos)
+        end = s.size();
+    string::size_type begin = (!s.empty() && s[0] == '-') ? 1 : 0;
+    while (end > begin + 3) {
+        end -= 3;
+        s.insert(end, " ");
+    }
+    return s;
+}
+
 bool cfg_read_bool(wxConfigBase *cf, const wxString& key, bool def_val)
 {
     bool b;

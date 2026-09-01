@@ -604,16 +604,22 @@ void MainPlot::prepare_peak_labels(const Model* model)
                 break;
             string tag(label, pos+1, right-pos-1);
             realt a;
+            const ParamFormat& pf = param_format();
             if (tag == "area")
-                label.replace(pos, right-pos+1, f->get_area(&a) ? S(a) : " ");
+                label.replace(pos, right-pos+1,
+                        f->get_area(&a) ? format_param(a, pf.area) : " ");
             else if (tag == "height")
-                label.replace(pos, right-pos+1, f->get_height(&a) ? S(a) : " ");
+                label.replace(pos, right-pos+1,
+                        f->get_height(&a) ? format_param(a, pf.height) : " ");
             else if (tag == "center")
-                label.replace(pos, right-pos+1, f->get_center(&a) ? S(a) : " ");
+                label.replace(pos, right-pos+1,
+                        f->get_center(&a) ? format_param(a, pf.center) : " ");
             else if (tag == "fwhm")
-                label.replace(pos, right-pos+1, f->get_fwhm(&a) ? S(a) : " ");
+                label.replace(pos, right-pos+1,
+                        f->get_fwhm(&a) ? format_param(a, pf.fwhm) : " ");
             else if (tag == "ib")
-                label.replace(pos, right-pos+1, f->get_ibreadth(&a) ? S(a):" ");
+                label.replace(pos, right-pos+1,
+                        f->get_ibreadth(&a) ? format_param(a, pf.other) : " ");
             else if (tag == "name")
                 label.replace(pos, right-pos+1, f->name);
             else if (tag == "br")

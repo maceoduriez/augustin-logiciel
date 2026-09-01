@@ -45,6 +45,7 @@ public:
                             { make_same_func_par("hwhm", event.IsChecked()); }
     void OnFuncButtonShape (wxCommandEvent& event)
                             { make_same_func_par("shape", event.IsChecked()); }
+    void OnFuncButtonPrec (wxCommandEvent& event);
     void OnVarButtonNew (wxCommandEvent& event);
     void OnVarButtonDel (wxCommandEvent&) { delete_selected_items(); }
     void OnVarButtonEdit (wxCommandEvent& event);

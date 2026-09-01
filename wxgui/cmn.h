@@ -35,6 +35,19 @@ inline wxString s2wx(std::string const& s) { return pchar2wx(s.c_str()); }
 inline std::string wx2s(wxString const& w)
                         { return std::string((const char*) w.ToUTF8()); }
 
+// nombre de décimales affichées pour les caractéristiques des fonctions
+// (-1 = automatique, format %g comme l'amont)
+struct ParamFormat
+{
+    int center, height, area, fwhm, other;
+    ParamFormat() : center(-1), height(-1), area(-1), fwhm(-1), other(-1) {}
+};
+ParamFormat& param_format();
+// formate une valeur avec ces décimales + séparateur de milliers (espace);
+// auto_fmt est utilisé quand decimals < 0
+std::string format_param(double value, int decimals,
+                         const char* auto_fmt="%g");
+
 inline wxArrayString stl2wxArrayString(std::vector<std::string> const& vs)
 {
     wxArrayString wxas;
