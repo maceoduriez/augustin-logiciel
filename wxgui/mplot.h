@@ -97,6 +97,15 @@ public:
     const std::map<std::string, wxColour>& func_colors() const
         { return func_colors_; }
     void reset_func_colors() { func_colors_.clear(); next_func_color_ = 0; }
+    // forget per-session color assignments (function map + custom data
+    // colors); called before loading another session, because function
+    // names restart at %_1 and would inherit stale colors otherwise
+    void reset_all_colors()
+    {
+        reset_func_colors();
+        if (!default_data_colors_.empty())
+            data_colors_ = default_data_colors_;
+    }
     bool get_x_reversed() const { return x_reversed_; }
     void show_popup_menu(wxMouseEvent &event);
     void set_hint_receiver(HintReceiver *hr)
@@ -135,6 +144,7 @@ private:
     mutable std::map<std::string, wxColour> func_colors_;
     mutable int next_func_color_;
     std::vector<wxColour> data_colors_;
+    std::vector<wxColour> default_data_colors_; // snapshot from read_settings
     bool crosshair_cursor_;
 
     std::vector<std::string> plabels_; // peak labels

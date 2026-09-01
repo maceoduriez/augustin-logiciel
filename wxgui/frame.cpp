@@ -1104,6 +1104,7 @@ void FFrame::OnExample(wxCommandEvent& event)
                          wxYES_NO | wxCENTRE | wxICON_QUESTION);
     if (r == wxYES) {
         get_main_plot()->bgm()->clear_background();
+        get_main_plot()->reset_all_colors();
         exec("reset; exec '" + wx2s(path) + "'");
     }
 }
@@ -1731,6 +1732,7 @@ void FFrame::OnSaveHistory (wxCommandEvent&)
 void FFrame::OnReset (wxCommandEvent&)
 {
     get_main_plot()->bgm()->clear_background();
+    get_main_plot()->reset_all_colors();
     exec("reset");
 }
 
@@ -1834,6 +1836,7 @@ void FFrame::OnSessionLoad(wxCommandEvent&)
                       wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (fdlg.ShowModal() == wxID_OK) {
         get_main_plot()->bgm()->clear_background();
+        get_main_plot()->reset_all_colors();
         last_session_path_ = fdlg.GetPath();
         exec("reset; exec '" + wx2s(last_session_path_) + "'");
         load_gui_colors_from_session(last_session_path_);

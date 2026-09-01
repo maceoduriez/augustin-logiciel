@@ -685,6 +685,7 @@ void MainPlot::read_settings(wxConfigBase *cf)
     data_colors_[0] = cfg_read_color(cf, wxT("0"), wxColour(0, 255, 0));
     for (int i = 1; i < (int) data_colors_.size(); i++)
         data_colors_[i] = cfg_read_color(cf, s2wx(S(i)), data_colors_[0]);
+    default_data_colors_ = data_colors_;
     cf->SetPath(wxT("../peak"));
     peakCol[0] = cfg_read_color(cf, wxT("0"), wxColour(255, 0, 0));
     for (int i = 0; i < max_peak_cols; i++)
