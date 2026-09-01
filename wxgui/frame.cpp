@@ -621,10 +621,10 @@ void FFrame::set_menubar()
 #endif
     session_menu->AppendSeparator();
     append_mi(session_menu, ID_SESSION_LOAD, GET_BMP(fileopen16),
-              "&Load Session",
+              "&Load Session\tCtrl-Shift-O",
               "Reset session and execute script");
     append_mi(session_menu, ID_SESSION_SAVE, GET_BMP(filesaveas16),
-              wxT("&Save Session..."),
+              wxT("&Save Session...\tCtrl-Shift-S"),
               wxT("Save current program state (as fityk script)"));
     append_mi(session_menu, ID_SAVE_HISTORY, GET_BMP(filesaveas16),
               wxT("Save &History..."),
